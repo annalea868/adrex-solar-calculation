@@ -2,7 +2,7 @@
 
 ## Overview
 
-I've created two enhanced energy production calculators that include **ALL frontend parameters** from the screenshots, replacing the simple 0.8 system efficiency with comprehensive, dynamic calculations.
+I've created two enhanced energy production calculators that include **ALL frontend parameters**, replacing the simple 0.8 system efficiency with comprehensive, dynamic calculations.
 
 ## What Was Created
 

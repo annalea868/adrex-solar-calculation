@@ -1,8 +1,8 @@
-# System Performance Formulas & Parameters
+# System Performance Formulas & Parameters for Energy Production
 
 ## Overview
 
-Both enhanced calculators now include **ALL frontend parameters** and use sophisticated formulas for accurate energy production calculations.
+The interactive calculator includes **ALL frontend parameters** and uses sophisticated formulas for accurate energy production calculations.
 
 ## Enhanced Energy Production Formula
 
@@ -118,91 +118,17 @@ Module Type → Temperature Coefficient
 - **Location (PLZ)** → `latitude/longitude` → Solar irradiance lookup
 - **Temperature** → `ambient_temp_c` → For temperature effects
 
-## Calculator-Specific Implementations
+## Why This Calculator Is More Accurate
 
-### 1. 500MB Grid Calculator (`solar_calculator_500mb.py`)
+The interactive calculator provides enhanced accuracy through:
 
-#### Data Source:
-- Pre-downloaded 500MB grid (0.75° resolution)
-- Bilinear interpolation between grid points
-- Instant calculations (<100ms)
-
-#### Irradiance Method:
-```python
-G = interpolate_radiation(lat, lon, tilt, azimuth, datetime)
-# Uses 4 surrounding grid points for bilinear interpolation
-```
-
-#### Use Case:
-- Batch processing (15-minute intervals for full year)
-- Offline applications
-- TypeScript integration
-- Fast simulations
-
-### 2. PVGIS Direct Calculator (`solar_calculator_pvgis_direct.py`)
-
-#### Data Source:
-- Live PVGIS API via `pvlib` library
-- Real-time satellite data
-- 30-60 second API calls
-
-#### Two Calculation Methods:
-
-##### Method 1: PVGIS Internal Calculation
-```python
-use_pvgis_calculation = True
-# Uses PVGIS's internal PV system model
-# Most accurate for standard systems
-energy_kwh = (pvgis_power_W / 1000) × time_hours
-```
-
-##### Method 2: Enhanced Formula with PVGIS Data
-```python
-use_pvgis_calculation = False  
-# Uses our enhanced formula with PVGIS irradiance
-energy_kwh = P_system × (G/1000) × η_system × T_effect × t
-```
-
-#### PVGIS Parameters:
-```python
-pvlib.iotools.get_pvgis_hourly(
-    latitude=lat,
-    longitude=lon, 
-    surface_tilt=tilt,
-    surface_azimuth=azimuth,
-    peakpower=total_kWp,
-    pvtechchoice="crystSi",  # Technology type
-    mountingplace="free",    # Mounting type
-    loss=system_losses_pct,  # Total system losses
-    usehorizon=True,         # Use horizon data
-    pvcalculation=True       # Include PV calculation
-)
-```
-
-#### Use Case:
-- Critical calculations requiring maximum accuracy
-- Real-time applications
-- Validation of 500MB results
-- Research and development
-
-## Accuracy Comparison
-
-### Typical Results (Berlin, Summer Noon):
-```
-Simple Method:     3.2 kWh (fixed 80% efficiency)
-500MB Enhanced:    3.8 kWh (+18.7% improvement)
-PVGIS Direct:      3.9 kWh (+21.9% improvement)
-```
-
-### Why Enhanced Methods Are More Accurate:
-
-1. **Dynamic System Efficiency**: 75-98% vs fixed 80%
-2. **Real Temperature Effects**: Module-specific coefficients
-3. **Installation Quality**: Premium vs standard vs basic losses
-4. **System Age**: Annual degradation calculations
-5. **Module Characteristics**: Exact specifications per module type
-6. **Shading Effects**: User-specified shading losses
-7. **Inverter Quality**: Type-specific efficiency values
+1. **Dynamic System Efficiency**: Calculates real efficiency (75-98%) instead of fixed 80%
+2. **Real Temperature Effects**: Uses module-specific temperature coefficients
+3. **Installation Quality**: Accounts for premium vs standard vs basic installation losses
+4. **System Age**: Includes annual degradation calculations
+5. **Module Characteristics**: Uses exact specifications for each module type
+6. **Shading Effects**: Incorporates user-specified shading losses
+7. **Inverter Quality**: Applies type-specific efficiency values
 
 ## Parameter Validation Ranges
 
@@ -229,19 +155,15 @@ annual_degradation: 0.003-0.008 (0.3-0.8% per year)
 ambient_temp_c: -20 to +50°C
 ```
 
-## Integration with Simulation
+## Integration with Storage Simulation
 
-### For Storage Simulation:
-1. Use **500MB calculator** for bulk calculations (35,040 intervals per year)
-2. Use **PVGIS direct** for validation and critical periods
-3. Apply **all frontend parameters** for maximum accuracy
-4. Calculate **15-minute energy production** for storage matching
-
-### Performance Optimization:
-- **500MB**: Parallel processing for multiple time points
-- **PVGIS**: Batch API calls for multiple years
-- **Caching**: Store results for repeated calculations
+### For Energy Storage Analysis:
+1. Apply **all frontend parameters** for maximum accuracy
+2. Calculate **15-minute energy production** intervals
+3. Match production with consumption data from Excel files
+4. Simulate battery charging/discharging cycles
+5. Calculate grid feed-in when storage is full
 
 ---
 
-**🔆 Both calculators now provide research-grade accuracy with all frontend parameters! 🔆**
+**🔆 The interactive calculator provides research-grade accuracy with all frontend parameters! 🔆**

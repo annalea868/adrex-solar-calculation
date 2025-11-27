@@ -1,0 +1,46 @@
+matrix_ev_quote[row][col]:
+
+row index = 165 - <battery-to-load ratio>
+column index = <PV-to-load ratio>
+
+Battery-to-load ratio: kWh battery per MWh/year load → kWh / (kWh*y^-1 * 0.001) = kWh/MWh
+PV-to-load ratio: either kWp per MWh/year load, or kWh per MWh/year load (heat pump case)
+
+
+
+
+
+
+Ergänzend dazu schreibt Hermann: 
+
+„Das Problem taucht auf, wenn der Verbrauch zu niedrig und die Speichergröße zu groß ist. Wenn z. B. nur 900 kWh im Jahr am E-Auto verbraucht wird, der Speicher aber größer 14 kWh ausgelegt wird, dann passt logischerweise das Verhältnis nicht mehr. Das Ergebnis wird größer als die Größen der X- und Y-Achsen der Matrix und läuft dann „out of Range“. Das Ergebnis wird negativ und ein Zugriff damit als Index für die Matrix schlägt fehlt.
+
+Eis Lösung ist wie folgt: Es muss eigentlich an allen Stellen im Quellcode an den eine Verhältniszahl zwischen Verbrauch und. Speichergröße und Verbrauch zu PV-Größe sowohl für den Hausverbrauch, Verbrauch E-Auto und Verbrauch-Wärmepumpe eine Abfrage stattfinden, ob das Ergebnis größer als die Matrix-Achsen wird und somit eine negativer Index erzeugt wird. Tritt dieser Fall ein, setzt man die EV-Quote auf ca. 3%, ohne auf die Matrix zuzugreifen. Denn dann ist klar, dass die EV-Quote so niedrig sein wird, dass sie 3% nicht überschreitet.
+
+Der Algorithmus zur Findung der Eigenverbrauchsquote basiert auf eine Matrix, die mit EV-Quoten aus einem normalen Haushalt gefüllt wurde und dessen Verbrauchschareakteristik widerspiegelt. Wärmepumpen und E-Autos habe aber naturgemäß eine ganz andere Verbrauchscharakterisitik was dazu führt, dass man den so gefundenen Wert nochmal wieder nach unten korrigieren muss. Denn an einer Wärmepumpe kann kann man keine EV-Quote von mehr als 15% - 18% erreichen. Ähnlich ist es beim E-Auto, es sei denn man ist Rentner und lädt das Auto nur zu Hause. Dafür sind in dem Kalkulator wiederum Parameter hinterlegt, die die gefundene EV-Quote aus der Matrix für eine Wärmepumpe und E-Auto an deren spezieller Verbrauchscharakterisitk anpasst bzw. korrigiert.
+
+Das bedeutet, wenn oben beschriebener Fall eintritt, sollte dies per Abfrage abgefangen werden, den Wert für die EV-Quote auf 3% setzen. Eine weitere Anpassung und Korrektur dieser EV-Quote für Wärmepumpe oder E-Auto darf dann nicht mehr weiter nach unten korrigiert werden.
+
+Um diese Probleme dauerhaft zu lösen, habe ich ja bereits vorgeschlagen und empfohlen, hierfür tatsächliche Lastgangdaten von  verschiedenen Haushalten, Betrieb, E-Autos, Wärmepumpen, etc. und PV-Anlagen bzw. Einstrahl- und Temperaturdaten zu verwenden, anstatt weiterhin mit der Matrix zu arbeiten. Damit können die jeweilige PV-Erzeugung, sowie die zeitgleichen Verbräuche gegeneinander aufgerechnet werden. Mit diesen Ergebnissen errechnet man die Einspeisung, die Speicherbe- und Entladung und den Direktverbrauch und erhält letztendlich eine reale  Eigenverbrauchsquote.
+
+Ich empfehle dazu den Entwicklern die Wiki-Pages über dieses Thema zu studieren.
+
+Es gibt Webseites und Hilfe-Communities. Da wird viel erklärt und beschrieben, wie solche Erträge berechnet werden. Ich denke, dass dies eine gute Hilfestellung leisten kann, wenn in Zukunft mit Lastgängen berechnet wird
+
+Die Entwickler dürfen aber auf keinen Fall aus Gründen des Urheberrechts einfach irgendwelche Formeln von anderen Softwareherstellern übernehmen, das ist verboten. Da weise ich an dieser Stelle nochmal ausdrücklich drauf hin, dies nicht zu tun. Vielmehr kann die Hilf-Community verwendet werden um zu lernen, wie das Ganze funktioniert. Aus dem gelernten muss man dann eine eigenen Schlüsse ziehen und draus einen entsprechenden Algorithmus entwickeln ohne einen zu kopieren.
+
+Für die Lastgänge gibt es eine kostenfreie openSource Software, mit denen man Lastgänge zur freien Verwendung erstellen kann. Auch gibt es Einstrahldaten von Wetterdiensten, die man so verwenden kann.  Ich habe mir die Werte für die Matrix selber errechnet, das hat ca. 6 Wochen bis 3 Monate gedauert, bis die beiden Matrixen fertig waren. Auch die Daten mit der Globalstrahlung abhängig von Postleitzahlen, habe ich selber erstellt. Hat lange gedauert, aber dafür lastet da kein Urheberrecht eines anderen drauf und kann so verwendet werden.“
+
+Liebe Grüße,
+Linda
+
+
+
+
+
+
+
+
+
+
+

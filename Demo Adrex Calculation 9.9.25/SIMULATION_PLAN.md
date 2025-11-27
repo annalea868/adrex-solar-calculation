@@ -99,7 +99,7 @@ For each 15-minute interval:
 - **Grid purchase cost**: kWh × electricity_price
 - **Net savings**: Self-consumption value + Feed-in revenue - Grid purchase cost
 
-## Input Variables (From Frontend Analysis)
+## Input Variables (From Frontend Website of the Adrex Konfigurator (only examples not all parameters are included yet, f.e. only a few module types like winiaco are added as examples))
 
 ### Location & System Configuration
 - **Postleitzahl**: 5-digit postal code (integer)
@@ -121,24 +121,23 @@ For each 15-minute interval:
 - **Inverter efficiency**: Percentage (default ~96%)
 - **System losses**: Percentage (default ~20% total)
 - **Degradation**: Annual percentage (default ~0.5%)
-- **Shading factors**: Percentage losses
+- **Shading factors**: Percentage losses (or more accurate shading factors, if google API is used (to use Google API the Postleitzahl isnt enough, we would need exact coordinates of the house))
 
 ## Simulation Implementation Plan
 
 ### Phase 1: Data Preparation
 1. **Load consumption profiles** from Excel files
-2. **Interpolate to 15-minute intervals** if needed
-3. **Create scaling functions** to match user's annual consumption
-4. **Validate data completeness** (8760 hours × 4 = 35,040 intervals)
+2. **Create scaling functions** to match user's annual consumption
+3. **Validate data completeness** (8760 hours × 4 = 35,040 intervals)
 
 ### Phase 2: Production Engine
-1. **Enhance current solar calculator** with all frontend parameters
+1. **Enhance current solar calculator** with all frontend parameters that can be inputed, modules etc. (to find in Admin Page of the Adrex Configurator)
 2. **Generate 15-minute production data** for full year
 3. **Apply all efficiency factors** dynamically
 4. **Include temperature and shading effects**
 
 ### Phase 3: Storage Simulation Engine
-1. **Implement minute-by-minute storage logic**
+1. **Implement 15-minute storage logic**
 2. **Track storage state** throughout the year
 3. **Calculate grid interactions** (feed-in and consumption)
 4. **Generate detailed energy flows**
@@ -146,14 +145,11 @@ For each 15-minute interval:
 ### Phase 4: Results & Validation
 1. **Calculate annual totals** and compare with lookup table results
 2. **Generate detailed breakdowns** by month/season
-3. **Provide economic analysis** with different tariff scenarios
-4. **Create visualization data** for charts and reports
+3. **Provide economic analysis (optional)** with different tariff scenarios
 
-### Phase 5: Optimization
+### Phase 5: Optimization & Integration into app
 1. **Performance optimization** for large datasets
-2. **Memory management** for year-long simulations
-3. **Caching strategies** for repeated calculations
-4. **API interface** for TypeScript integration
+2. **API interface** for TypeScript integration; include calcualtor into Frontend
 
 ## Expected Improvements Over Lookup Tables
 
@@ -163,18 +159,18 @@ For each 15-minute interval:
 4. **Detailed insights**: Shows monthly/seasonal variations
 5. **Scenario analysis**: Easy to test different configurations
 6. **No bounds limits**: Works for any system size combination
-7. **Transparency**: Users can see exactly how calculations work
+7. **Transparency (if wanted)**: Users can see exactly how calculations work
 
 ## Data Sources Required
 
-1. **Solar irradiation**: Already available in optimized 500MB grid
+1. **Solar irradiation**: Already available in optimized 500MB grid (data will be downloaded from PVGIS API, or different API? API has still to be decided on)
 2. **Consumption profiles**: Available in Excel files in modeling folder
-3. **Weather data**: Temperature effects (can be estimated or enhanced later)
-4. **Tariff data**: Electricity prices and feed-in rates (user input)
+3. **Weather data**: Temperature effects (can be estimated or enhanced later; if only long periods are calculated and not single days, weather data as well as live solar irridation data, isnt nessesary, f.e. for a year the solar irridation and weather data from the last years will suffice)
+4. **Tariff data (if economic calculations are also included in this calculator)**: Electricity prices and feed-in rates (user input)
 
 ## Success Metrics
 
-1. **Accuracy validation**: Results within ±5% of lookup table for standard cases
+1. **Accuracy validation**: Results within ±5% of other sources/calculators for standard cases
 2. **Performance**: Full year simulation in <10 seconds
 3. **Coverage**: Handles edge cases that break lookup table
 4. **Usability**: Clear, detailed results that explain the calculations
