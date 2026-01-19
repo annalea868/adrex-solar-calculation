@@ -79,11 +79,16 @@ class SolarIrradiationCalculator:
         print(f"   ⏳ Dies dauert 30-60 Sekunden...")
         
         try:
+            # Convert user azimuth to PVGIS convention
+            # User: 0°=North, 90°=East, 180°=South, 270°=West
+            # PVGIS: 0°=South, 90°=West, 180°=North, 270°=East
+            pvgis_azimuth = (azimuth + 180) % 360
+            
             data, meta = get_pvgis_hourly(
                 latitude=latitude,
                 longitude=longitude,
                 surface_tilt=tilt,
-                surface_azimuth=azimuth,
+                surface_azimuth=pvgis_azimuth,
                 start=year,
                 end=year,
                 components=True,
@@ -142,7 +147,7 @@ class SolarIrradiationCalculator:
         Parameters:
         - latitude, longitude: Location coordinates (or None if using PLZ)
         - tilt: Panel tilt angle (degrees, 0=horizontal, 90=vertical)
-        - azimuth: Panel orientation (degrees, 0=South, 90=West, 270=East)
+        - azimuth: Panel orientation (degrees, 0=North, 90=East, 180=South, 270=West)
         - start_date: Start date (DD/MM/YYYY string)
         - start_time: Start time (HH:MM string)
         - end_date: End date (DD/MM/YYYY string)
@@ -347,7 +352,7 @@ def main():
         # Panel configuration
         print("\n🏠 PANEL-KONFIGURATION:")
         tilt = int(input("Neigung in Grad (z.B. 30): "))
-        azimuth = int(input("Ausrichtung in Grad (0°=Süd, 90°=West, 270°=Ost): "))
+        azimuth = int(input("Ausrichtung in Grad (0°=Nord, 90°=Ost, 180°=Süd, 270°=West): "))
         
         # Time period
         print("\n📅 ZEITRAUM:")
@@ -446,60 +451,6 @@ def main():
         print(f"\n❌ Unerwarteter Fehler: {e}")
 
 
-def quick_demo():
-    """Quick demo with predefined values."""
-    print("\n🚀 Quick Demo - Berlin, Juni 2024")
-    print("="*50)
-    
-    calculator = SolarIrradiationCalculator()
-    
-    # Demo parameters with PV system
-    result_table = calculator.calculate_irradiation_table(
-        latitude=52.5,
-        longitude=13.4,
-        tilt=30,
-        azimuth=0,
-        start_date="01/06/2024",
-        start_time="00:00",
-        end_date="07/06/2024",  # One week
-        end_time="23:45",
-        pv_system_kw=10,  # 10 kW PV system
-        system_efficiency=0.8  # 80% efficiency
-    )
-    
-    if result_table is not None:
-        calculator.show_sample(result_table, n=20)
-        
-        # Ask to save even in demo mode
-        print()
-        save = input("\nTabelle als CSV speichern? (j/n): ").strip().lower()
-        if save == 'j':
-            default_name = "demo_solar_data_20240601_20240607.csv"
-            print(f"Standard-Dateiname: {default_name}")
-            filename = input("Dateiname eingeben (Enter für Standard): ").strip()
-            
-            if not filename:
-                filename = default_name
-            elif not filename.endswith('.csv'):
-                filename += '.csv'
-            
-            calculator.save_table(result_table, filename)
-            print(f"📁 Gespeichert in: {os.path.abspath(filename)}")
-        
-        print(f"\n✅ Demo erfolgreich!")
-        print(f"   {len(result_table)} Intervalle für eine Woche")
-        
-        if 'PV_Energie_kWh' in result_table.columns:
-            print(f"   PV-Energie produziert: {result_table['PV_Energie_kWh'].sum():.2f} kWh")
-        else:
-            print(f"   Gesamt-Einstrahlung: {result_table['Einstrahlung_15min_Wh_m2'].sum()/1000:.1f} kWh/m²")
-
-
 if __name__ == "__main__":
-    import sys
-    
-    if "--demo" in sys.argv:
-        quick_demo()
-    else:
-        main()
+    main()
 

@@ -21,6 +21,8 @@ class StorageSimulator:
     # Battery systems loaded from Excel file
     BATTERY_SYSTEMS = None
     BATTERY_EXCEL_FILE = "2025-11_19_Nettokapazitäten Speicher.xlsx"
+    HOUSEHOLD_PROFILE_FILE = "modeling/standardlastprofil-haushaltskunden-2026.xlsx"
+    HOUSEHOLD_PROFILE_INTERVALS = 35040  # 365 Tage × 96 Intervalle
     
     @classmethod
     def load_battery_systems(cls):
@@ -118,45 +120,163 @@ class StorageSimulator:
         
         print(f"\n✅ Gesamt: {len(systems)} Systeme aus 'Netto Kapazität' Spalte")
     
-    def load_consumption_profile(self, excel_file, annual_consumption_kwh):
+    def load_household_consumption(self, annual_consumption_kwh, target_intervals=None, target_datetimes=None):
         """
-        Load and scale consumption profile from Excel.
+        Load the official household standard load profile (15-min intervals) and scale it.
         
         Parameters:
-        - excel_file: Path to Excel file with consumption profile
-        - annual_consumption_kwh: User's annual consumption to scale to
+        - annual_consumption_kwh: User's annual consumption (kWh)
+        - target_intervals: Optional number of intervals to match (fallback if datetimes missing)
+        - target_datetimes: Optional pandas Series/list with exact timestamps to extract
         
         Returns:
-        - DataFrame with 15-minute consumption values
+        - Numpy array with consumption per interval (kWh)
         """
-        print(f"\n📊 Lade Verbrauchsprofil...")
-        print(f"   Datei: {excel_file}")
+        print("\n📊 Lade Standardlastprofil Haushaltskunden...")
+        print(f"   Datei: {self.HOUSEHOLD_PROFILE_FILE}")
+        print(f"   Ziel-Jahresverbrauch: {annual_consumption_kwh} kWh")
         
         try:
-            # Load Excel file (adjust sheet name and columns as needed)
-            df = pd.read_excel(excel_file)
+            df = pd.read_excel(self.HOUSEHOLD_PROFILE_FILE)
+            df_clean = df.iloc[2:].copy()  # Remove header/control rows
             
-            # Assuming the Excel has a column with consumption values
-            # This needs to be adjusted based on actual Excel structure
+            if 'SLP-HB [kWh]' not in df_clean.columns:
+                raise ValueError("Spalte 'SLP-HB [kWh]' nicht gefunden")
             
-            print(f"   ✅ {len(df)} Intervalle geladen")
-            print(f"   Skaliere auf {annual_consumption_kwh} kWh/Jahr")
+            df_clean = df_clean.reset_index(drop=True)
+            df_clean['IntervalStart'] = pd.to_datetime(df_clean['Datum'])
             
-            # Scale to user's annual consumption
-            current_total = df['consumption'].sum()
-            scale_factor = annual_consumption_kwh / current_total
-            df['consumption_kwh'] = df['consumption'] * scale_factor
+            # Validate that profile starts on January 1st
+            first_date = df_clean['IntervalStart'].iloc[0]
+            if first_date.month != 1 or first_date.day != 1:
+                print(f"   ⚠️ WARNUNG: Profil startet nicht am 1. Januar!")
+                print(f"      Tatsächlicher Start: {first_date.strftime('%d.%m.%Y')}")
+                print(f"      Dies kann zu falschen saisonalen Zuordnungen führen.")
             
-            return df
+            # Check profile covers full year (should be 35040 intervals = 365 days)
+            expected_intervals = 365 * 96  # 96 intervals per day
+            if len(df_clean) != expected_intervals:
+                print(f"   ⚠️ WARNUNG: Profil hat {len(df_clean)} Intervalle (erwartet: {expected_intervals})")
+                if len(df_clean) == 366 * 96:
+                    print(f"      Profil enthält Schaltjahr (366 Tage)")
             
+            profile_values = df_clean['SLP-HB [kWh]'].astype(float).values
+            profile_sum = profile_values.sum()
+            
+            if profile_sum == 0:
+                raise ValueError("Profil-Summe ist 0 kWh")
+            
+            scale_factor = annual_consumption_kwh / profile_sum
+            scaled_profile = profile_values * scale_factor
+            
+            profile_df = pd.DataFrame({
+                'IntervalStart': df_clean['IntervalStart'],
+                'Scaled_kWh': scaled_profile
+            })
+            profile_df['doy'] = profile_df['IntervalStart'].dt.dayofyear
+            profile_df['minute_of_day'] = profile_df['IntervalStart'].dt.hour * 60 + profile_df['IntervalStart'].dt.minute
+            
+            print(f"   ✅ {len(scaled_profile)} Intervalle geladen")
+            print(f"   Profil-Summe nach Skalierung: {scaled_profile.sum():.2f} kWh")
+            print(f"   Skalierungsfaktor: {scale_factor:.6f}")
+            
+            if target_datetimes is not None:
+                return self._extract_profile_for_datetimes(profile_df, target_datetimes)
+            
+            if target_intervals and target_intervals != len(scaled_profile):
+                return self._match_interval_length(
+                    scaled_profile,
+                    target_intervals,
+                    annual_consumption_kwh
+                )
+            
+            return scaled_profile
+        
+        except FileNotFoundError:
+            print("   ❌ Standardlastprofil nicht gefunden.")
         except Exception as e:
-            print(f"   ❌ Fehler beim Laden: {e}")
+            print(f"   ❌ Fehler beim Laden des Lastprofils: {e}")
+        
+        return None
+    
+    def _match_interval_length(self, consumption_array, target_intervals, annual_consumption_kwh):
+        """
+        Adjust consumption array to match the number of intervals of the production profile.
+        Preserves the typical shape by repeating the pattern and rescales to expected total.
+        """
+        original_length = len(consumption_array)
+        print(f"   ℹ️ Produktionsdaten haben {target_intervals} Intervalle (Profil: {original_length})")
+        
+        resized = np.resize(consumption_array, target_intervals)
+        
+        # Expected total consumption for the simulated time window
+        fraction_of_year = target_intervals / original_length
+        expected_total = annual_consumption_kwh * fraction_of_year
+        current_total = resized.sum()
+        
+        if current_total > 0:
+            resize_factor = expected_total / current_total
+            resized *= resize_factor
+            print(f"   Angepasste Summe für Zeitfenster: {resized.sum():.2f} kWh")
+        else:
+            print("   ⚠️ Angepasster Verbrauch ist 0 kWh, verwende Nullen.")
+            resized = np.zeros(target_intervals)
+        
+        return resized
+    
+    def _extract_profile_for_datetimes(self, profile_df, target_datetimes):
+        """
+        Extract scaled consumption values that match the exact timestamps of the production data.
+        """
+        try:
+            target_index = pd.to_datetime(target_datetimes)
+        except Exception as e:
+            print(f"   ❌ Konnte Ziel-Datumswerte nicht parsen: {e}")
             return None
+        
+        lookup = profile_df.set_index(['doy', 'minute_of_day'])['Scaled_kWh'].to_dict()
+        max_doy = int(profile_df['doy'].max())
+        
+        values = np.zeros(len(target_index))
+        missing = 0
+        
+        for idx, ts in enumerate(target_index):
+            doy = ts.timetuple().tm_yday
+            minute = ts.hour * 60 + ts.minute
+            key = (doy, minute)
+            
+            if key not in lookup:
+                # Handle leap day or calendar mismatches by wrapping into 365-day profile
+                if doy > max_doy:
+                    doy = max_doy
+                else:
+                    doy = ((doy - 1) % max_doy) + 1
+                key = (doy, minute)
+            
+            value = lookup.get(key)
+            if value is None:
+                values[idx] = 0.0
+                missing += 1
+            else:
+                values[idx] = value
+        
+        if missing:
+            print(f"   ⚠️ {missing} Intervalle ohne SLP-Match → 0 kWh gesetzt")
+        
+        requested_total = values.sum()
+        print(f"   ✅ {len(values)} Intervalle nach Kalender-Zuordnung, Summe: {requested_total:.2f} kWh")
+        
+        return values
     
     def create_dummy_consumption(self, num_intervals, annual_consumption_kwh):
         """
-        Create dummy consumption profile for testing.
-        Uses typical household pattern.
+        ⚠️ DEPRECATED - FALLBACK ONLY ⚠️
+        
+        Create synthetic consumption profile using simple time-based averaging.
+        This is ONLY used as emergency fallback if Standardlastprofil Excel cannot be loaded.
+        
+        WARNING: Does NOT use real seasonal patterns! 
+        Uses generic day/night factors instead of actual consumption data.
         
         Parameters:
         - num_intervals: Number of 15-minute intervals
@@ -165,7 +285,8 @@ class StorageSimulator:
         Returns:
         - Array with consumption per 15-min interval (kWh)
         """
-        print(f"\n📊 Erstelle Test-Verbrauchsprofil...")
+        print(f"\n⚠️  ACHTUNG: Verwende FALLBACK-Verbrauchsprofil!")
+        print(f"   (Keine saisonalen Muster - nur generische Tag/Nacht-Verteilung)")
         print(f"   Jahresverbrauch: {annual_consumption_kwh} kWh")
         
         # Average consumption per interval
@@ -347,15 +468,37 @@ class StorageSimulator:
         print(f"   ✅ {len(production)} Intervalle geladen")
         
         # Load or create consumption data
+        prod_datetimes = None
+        if {'Datum', 'Uhrzeit'}.issubset(prod_df.columns):
+            try:
+                prod_datetimes = pd.to_datetime(
+                    prod_df['Datum'].astype(str) + " " + prod_df['Uhrzeit'].astype(str)
+                )
+            except Exception as e:
+                print(f"   ⚠️ Konnte Produktions-Zeitstempel nicht parsen: {e}")
+                prod_datetimes = None
+        
         if isinstance(consumption_csv_or_annual_kwh, str):
             # Load from CSV
             print(f"📊 Lade Verbrauchsdaten...")
             cons_df = pd.read_csv(consumption_csv_or_annual_kwh)
             consumption = cons_df['Verbrauch_kWh'].values
         else:
-            # Create dummy consumption
-            annual_kwh = consumption_csv_or_annual_kwh
-            consumption = self.create_dummy_consumption(len(production), annual_kwh)
+            # Scale household standard load profile to requested annual consumption
+            annual_kwh = float(consumption_csv_or_annual_kwh)
+            consumption = self.load_household_consumption(
+                annual_kwh,
+                target_intervals=len(production),
+                target_datetimes=prod_datetimes
+            )
+            
+            if consumption is None:
+                print("\n" + "="*60)
+                print("⚠️  WARNUNG: Standardlastprofil konnte nicht geladen werden!")
+                print("   Verwende FALLBACK mit synthetischem Profil")
+                print("   → Keine korrekten saisonalen Verbrauchsmuster!")
+                print("="*60)
+                consumption = self.create_dummy_consumption(len(production), annual_kwh)
         
         print(f"   ✅ {len(consumption)} Intervalle")
         
@@ -436,7 +579,7 @@ def main():
         else:
             annual_kwh = float(input("Jahresverbrauch in kWh (z.B. 5000): "))
             consumption_input = annual_kwh
-            print("   → Erstelle typisches Verbrauchsprofil")
+            print("   → Skaliere Standardlastprofil auf Nutzer-Verbrauch")
         
         # Run simulation
         print("\n" + "="*60)
