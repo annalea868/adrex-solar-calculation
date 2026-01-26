@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Enhanced Solar Calculator with Full Frontend Integration
+Enhanced Solar Calculator with Parameters from Frontend Interface
 Includes all user input parameters from the frontend for accurate energy production calculation.
 """
 
@@ -474,7 +474,7 @@ class EnhancedSolarCalculator:
                                 target_datetime: datetime,
                                 
                                 # PV System Configuration
-                                pv_module_type: str = "winaico_gg_black_450",
+                                pv_module_ztype: str = "winaico_gg_black_450",
                                 module_count: int = 40,
                                 tilt: float = 30.0,
                                 azimuth: float = 0.0,

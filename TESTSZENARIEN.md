@@ -164,7 +164,7 @@ Jahresverbrauch:            9000 kWh
 **Erwartetes Ergebnis:**
 - PV/Verbrauch-Ratio: 0.89
 - System deutlich zu klein für sehr hohen Verbrauch
-- Trotz PV und Speicher sehr viel Netzbezug nötig
+- Trotz PV und Speicher sehr viel Netzbezug nötig (PV Energie reicht nur im Hoch-Sommer)
 - Autarkie nur ~30-35%
 
 ---
