@@ -63,8 +63,11 @@ class EnergySystemSimulator:
             os.makedirs(cache_dir)
         
         # File paths
-        self.BATTERY_EXCEL_FILE = "2025-11_19_Nettokapazitäten Speicher.xlsx"
+        self.BATTERY_EXCEL_FILE = "2025-11_19_Nettokapazitäten Speicher (004).xlsx"
         self.HOUSEHOLD_PROFILE_FILE = "modeling/standardlastprofil-haushaltskunden-2026.xlsx"
+        
+        # Load battery systems with efficiency data
+        self.battery_systems = self.load_battery_systems()
         
         # German postal codes (sample)
         self.plz_to_coords = {
@@ -82,6 +85,41 @@ class EnergySystemSimulator:
         
         print("✅ Energy System Simulator initialisiert")
         print(f"   Cache: {cache_dir}")
+        if self.battery_systems:
+            print(f"   Speichersysteme: {len(self.battery_systems)} geladen")
+    
+    def load_battery_systems(self):
+        """Load battery systems with capacity and efficiency from Excel."""
+        try:
+            df = pd.read_excel(self.BATTERY_EXCEL_FILE)
+            
+            battery_dict = {}
+            
+            for idx, row in df.iterrows():
+                name = row.iloc[0].strip()  # Speicherhersteller / Typ
+                capacity = float(row.iloc[1])  # Netto Kapazität
+                efficiency_str = str(row.iloc[2])  # Effizienz (grob)
+                storage_type = row.iloc[3]  # Speicher-Typ
+                
+                # Parse efficiency
+                if '95' in efficiency_str or efficiency_str == '0.95':
+                    efficiency = 0.95
+                elif '75-80' in efficiency_str:
+                    efficiency = 0.78  # Mittelwert von 75-80%
+                else:
+                    efficiency = 0.90  # Default fallback
+                
+                battery_dict[name] = {
+                    'capacity_kwh': capacity,
+                    'efficiency': efficiency,
+                    'type': storage_type
+                }
+            
+            return battery_dict
+            
+        except Exception as e:
+            print(f"   ⚠️ Konnte Speichersysteme nicht laden: {e}")
+            return {}
     
     # ============================================================================
     # TEIL 1: PV-PRODUKTION (Solar Irradiation & Energy Calculation)
@@ -728,10 +766,57 @@ def main():
         end_date = input("   Enddatum (DD/MM/YYYY, z.B. 30/06/2024): ")
         end_time = input("   Endzeit (HH:MM, z.B. 23:45): ")
         
-        # 4. Batterie
-        print("\n🔋 BATTERIE:")
-        battery_capacity_kwh = float(input("   Speicherkapazität in kWh (z.B. 10): "))
-        battery_efficiency = float(input("   Wirkungsgrad (z.B. 0.95 für 95%): ") or "0.95")
+        # 4. Batterie-Auswahl
+        print("\n🔋 BATTERIE-SYSTEM:")
+        
+        if simulator.battery_systems:
+            # Show available battery systems grouped by type
+            dc_systems = {k: v for k, v in simulator.battery_systems.items() if v['type'] == 'DC'}
+            ac_systems = {k: v for k, v in simulator.battery_systems.items() if v['type'] == 'AC'}
+            
+            print("   Verfügbare Systeme:")
+            print()
+            
+            all_systems = list(simulator.battery_systems.items())
+            
+            if dc_systems:
+                print("   DC-Systeme (Effizienz 95%):")
+                for i, (name, spec) in enumerate([item for item in all_systems if item[1]['type'] == 'DC'], 1):
+                    print(f"   {i}. {name}: {spec['capacity_kwh']} kWh")
+            
+            dc_count = len(dc_systems)
+            
+            if ac_systems:
+                print(f"\n   AC-Systeme (Effizienz ~78%):")
+                for i, (name, spec) in enumerate([item for item in all_systems if item[1]['type'] == 'AC'], dc_count + 1):
+                    print(f"   {i}. {name}: {spec['capacity_kwh']} kWh")
+            
+            print()
+            battery_choice = input("   Nummer des Batterie-Systems: ").strip()
+            
+            try:
+                battery_idx = int(battery_choice) - 1
+                selected_battery_name = all_systems[battery_idx][0]
+                selected_battery = all_systems[battery_idx][1]
+                
+                battery_capacity_kwh = selected_battery['capacity_kwh']
+                battery_efficiency = selected_battery['efficiency']
+                battery_type = selected_battery['type']
+                
+                print(f"\n   ✅ Gewählt: {selected_battery_name}")
+                print(f"      Kapazität: {battery_capacity_kwh} kWh (netto)")
+                print(f"      Effizienz: {battery_efficiency:.0%}")
+                print(f"      Typ: {battery_type}-gekoppelt")
+                
+            except (ValueError, IndexError):
+                print(f"   ⚠️ Ungültige Auswahl, verwende Standard (10 kWh, 95%)")
+                battery_capacity_kwh = 10.0
+                battery_efficiency = 0.95
+        else:
+            print("   ⚠️ Batteriesysteme konnten nicht geladen werden")
+            print("   Manuelle Eingabe:")
+            battery_capacity_kwh = float(input("   Speicherkapazität in kWh: "))
+            battery_efficiency = float(input("   Wirkungsgrad (z.B. 0.95): ") or "0.95")
         
         # 5. Verbrauch
         print("\n🏠 VERBRAUCH:")
