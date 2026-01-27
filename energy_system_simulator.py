@@ -64,7 +64,7 @@ class EnergySystemSimulator:
         
         # File paths
         self.BATTERY_EXCEL_FILE = "daten/2025-11_19_Nettokapazitäten Speicher (004).xlsx"
-        self.HOUSEHOLD_PROFILE_FILE = "modeling/standardlastprofil-haushaltskunden-2026.xlsx"
+        self.HOUSEHOLD_PROFILE_FILE = "daten/standardlastprofil-haushaltskunden-2026.xlsx"
         
         # Load battery systems with efficiency data
         self.battery_systems = self.load_battery_systems()
