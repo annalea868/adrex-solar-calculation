@@ -15,3 +15,6 @@ pvgis_cache/
 simulation*.csv
 Szenario*.csv
 szenario*.csv
+NEUE*.csv
+*dachfläche*.csv
+*dachflaeche*.csv
