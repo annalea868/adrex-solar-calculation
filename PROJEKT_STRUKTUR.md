@@ -17,27 +17,31 @@ TABELLENSTRUKTUR.md                 ← Erklärung der CSV-Ausgabe
 TESTING_DOCUMENTATION.md            ← Test-Dokumentation
 ```
 
-### Daten:
-```
-HAUSHALT_LASTPROFIL_INFO.md         ← Erklärt Standardlastprofil
-SPEICHER_SYSTEME_NEU.md             ← 29 Batteriesysteme mit Effizienz
-```
-
-### Excel-Dateien (benötigt):
-```
-2025-11_19_Nettokapazitäten Speicher (004).xlsx  ← Batterien (mit Effizienz!)
-modeling/standardlastprofil-haushaltskunden-2026.xlsx
-modeling/2025-05-27_Wärmepumpe_Lastgänge.xlsx
-modeling/Standardlastprofile_Elektrofahrzeuge_Anhang_E.xlsx
-```
-
 ### Ordner:
 ```
-modeling/                           ← Original-Daten vom Kunden
-pvgis_cache/                        ← PVGIS-Daten-Cache
-archiv_alt/                         ← Alte/nicht mehr benötigte Dateien
-old_versions/                       ← Sehr alte Versionen
-Demo Adrex Calculation 9.9.25/      ← Demo-Calculator (separate)
+📁 daten/                           ← ALLE DATEN
+   ├── 2025-11_19_Nettokapazitäten Speicher (004).xlsx  ← Batterien
+   ├── 2025-11_19_Nettokapazitäten Speicher.xlsx        ← Batterien (alt)
+   ├── SPEICHER_SYSTEME_NEU.md                          ← Batterie-Doku
+   └── HAUSHALT_LASTPROFIL_INFO.md                      ← Verbrauchs-Doku
+
+📁 modeling/                        ← Lastgangdaten (Kunde)
+   ├── standardlastprofil-haushaltskunden-2026.xlsx
+   ├── 2025-05-27_Wärmepumpe_Lastgänge.xlsx
+   ├── Standardlastprofile_Elektrofahrzeuge_Anhang_E.xlsx
+   ├── misc.ts (Lookup-Tables)
+   └── calculation.md (Erklärt Lookup-Tables)
+
+📁 test_results/                    ← Lokale Test-Simulationen (ignored)
+   └── *.csv (Simulationsergebnisse)
+
+📁 pvgis_cache/                     ← PVGIS-Daten-Cache (ignored)
+
+📁 archiv_alt/                      ← Alte/nicht mehr benötigte Dateien
+
+📁 old_versions/                    ← Sehr alte Versionen
+
+📁 Demo Adrex Calculation 9.9.25/   ← Demo-Calculator (separate)
 ```
 
 ---

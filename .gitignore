@@ -9,6 +9,9 @@ __pycache__/
 # PVGIS Cache (zu groß für Git)
 pvgis_cache/
 
+# Test Results Ordner (lokale Simulationen)
+test_results/
+
 # Test/Simulation CSV Dateien (optional - können lokal bleiben)
 *Test*.csv
 *test*.csv
