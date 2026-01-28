@@ -65,6 +65,11 @@ class EnergySystemSimulator:
         # File paths
         self.BATTERY_EXCEL_FILE = "daten/2025-11_19_Nettokapazitäten Speicher (004).xlsx"
         self.HOUSEHOLD_PROFILE_FILE = "daten/standardlastprofil-haushaltskunden-2026.xlsx"
+        self.ECAR_PROFILE_FILE = "daten/Standardlastprofile_Elektrofahrzeuge_Anhang_E.xlsx"
+        self.HEATPUMP_PROFILE_FILE = "daten/2025-05-27_Wärmepumpe_Lastgänge.xlsx"
+        
+        # E-Auto Conversion: km/year to kWh/year
+        self.ECAR_KWH_PER_100KM = 18  # Durchschnitts-E-Auto
         
         # Load battery systems with efficiency data
         self.battery_systems = self.load_battery_systems()
@@ -452,6 +457,159 @@ class EnergySystemSimulator:
             print(f"   ❌ Fehler: {e}")
             return None
     
+    def load_ecar_consumption(self, km_per_year, target_datetimes):
+        """
+        Load and scale E-Auto consumption profile (weekday/weekend).
+        
+        Parameters:
+        - km_per_year: Annual driving distance in km
+        - target_datetimes: DatetimeIndex to match
+        
+        Returns:
+        - Array with consumption per 15-min interval (kWh)
+        """
+        if km_per_year <= 0:
+            return np.zeros(len(target_datetimes))
+        
+        print("\n" + "="*60)
+        print("🚗 E-AUTO VERBRAUCH")
+        print("="*60)
+        print(f"   Datei: {self.ECAR_PROFILE_FILE}")
+        print(f"   Fahrleistung: {km_per_year:,.0f} km/Jahr")
+        
+        # Convert km to kWh
+        annual_kwh = (km_per_year / 100) * self.ECAR_KWH_PER_100KM
+        print(f"   Umrechnung: ({km_per_year}/100) × {self.ECAR_KWH_PER_100KM} = {annual_kwh:.0f} kWh/Jahr")
+        
+        try:
+            # Load both sheets
+            df_weekday = pd.read_excel(self.ECAR_PROFILE_FILE, sheet_name=0, header=None)
+            df_weekend = pd.read_excel(self.ECAR_PROFILE_FILE, sheet_name=1, header=None)
+            
+            # Extract column B (index 1), starting from row 5
+            weekday_10min = pd.to_numeric(df_weekday.iloc[5:, 1], errors='coerce').dropna().values
+            weekend_10min = pd.to_numeric(df_weekend.iloc[5:, 1], errors='coerce').dropna().values
+            
+            print(f"   Werktag-Profil: {len(weekday_10min)} Werte (10-Min)")
+            print(f"   Wochenend-Profil: {len(weekend_10min)} Werte (10-Min)")
+            
+            # Resample 10-min to 15-min profiles
+            weekday_15min = self._resample_10min_to_15min(weekday_10min)
+            weekend_15min = self._resample_10min_to_15min(weekend_10min)
+            
+            # Build full year profile
+            year_profile = self._build_ecar_year_profile(weekday_15min, weekend_15min)
+            
+            # Scale to annual kWh
+            year_sum = year_profile.sum()
+            if year_sum > 0:
+                scale_factor = annual_kwh / year_sum
+                scaled_profile = year_profile * scale_factor
+                print(f"   Jahresprofil erstellt: {len(scaled_profile)} Intervalle")
+                print(f"   Skaliert von {year_sum:.2f} auf {scaled_profile.sum():.2f} kWh")
+            else:
+                scaled_profile = year_profile
+            
+            # Extract for target datetimes (same logic as household)
+            return self._extract_consumption_for_datetimes(scaled_profile, target_datetimes)
+            
+        except Exception as e:
+            print(f"   ❌ Fehler: {e}")
+            return np.zeros(len(target_datetimes))
+    
+    def _resample_10min_to_15min(self, data_10min):
+        """Resample 10-minute to 15-minute intervals."""
+        # Create 10-min time series
+        times_10min = pd.date_range('2023-01-01', periods=len(data_10min), freq='10min')
+        ts_10min = pd.Series(data_10min, index=times_10min)
+        
+        # Resample to 15-min (interpolate)
+        ts_15min = ts_10min.resample('15min').interpolate()
+        
+        return ts_15min.values
+    
+    def _build_ecar_year_profile(self, weekday_profile, weekend_profile):
+        """Build full year E-Car profile from weekday/weekend patterns."""
+        year_data = []
+        
+        # 2023 calendar
+        start_date = pd.Timestamp('2023-01-01')
+        
+        for day_num in range(365):
+            current_date = start_date + pd.Timedelta(days=day_num)
+            
+            # Check if weekend (5=Saturday, 6=Sunday)
+            if current_date.dayofweek >= 5:
+                year_data.extend(weekend_profile)
+            else:
+                year_data.extend(weekday_profile)
+        
+        return np.array(year_data)
+    
+    def _extract_consumption_for_datetimes(self, year_profile, target_datetimes):
+        """Extract consumption values matching target timestamps."""
+        # Simple extraction by index matching
+        # Assumes year_profile has 35,040 values aligned to 2023
+        
+        target_index = pd.to_datetime(target_datetimes)
+        result = np.zeros(len(target_index))
+        
+        for idx, ts in enumerate(target_index):
+            # Calculate index in year_profile
+            day_of_year = ts.timetuple().tm_yday - 1  # 0-indexed
+            minute_of_day = ts.hour * 60 + ts.minute
+            interval_of_day = minute_of_day // 15
+            
+            year_idx = day_of_year * 96 + interval_of_day
+            
+            if 0 <= year_idx < len(year_profile):
+                result[idx] = year_profile[year_idx]
+        
+        return result
+    
+    def load_heatpump_consumption(self, annual_kwh, target_datetimes):
+        """
+        Load and scale heat pump consumption profile.
+        
+        Parameters:
+        - annual_kwh: Annual heat pump consumption (kWh)
+        - target_datetimes: DatetimeIndex to match
+        
+        Returns:
+        - Array with consumption per 15-min interval (kWh)
+        """
+        if annual_kwh <= 0:
+            return np.zeros(len(target_datetimes))
+        
+        print("\n" + "="*60)
+        print("🔥 WÄRMEPUMPE VERBRAUCH")
+        print("="*60)
+        print(f"   Datei: {self.HEATPUMP_PROFILE_FILE}")
+        print(f"   Jahresverbrauch: {annual_kwh:,.0f} kWh")
+        
+        try:
+            df = pd.read_excel(self.HEATPUMP_PROFILE_FILE)
+            
+            if 'Verbrauch_Last' not in df.columns:
+                raise ValueError("Spalte 'Verbrauch_Last' nicht gefunden")
+            
+            profile_values = df['Verbrauch_Last'].astype(float).values
+            profile_sum = profile_values.sum()
+            
+            # Scale to annual consumption
+            scale_factor = annual_kwh / profile_sum
+            scaled_profile = profile_values * scale_factor
+            
+            print(f"   Profil: {len(scaled_profile)} Intervalle")
+            print(f"   Skaliert von {profile_sum:.2f} auf {scaled_profile.sum():.2f} kWh")
+            
+            # Extract for target datetimes
+            return self._extract_consumption_for_datetimes(scaled_profile, target_datetimes)
+            
+        except Exception as e:
+            print(f"   ❌ Fehler: {e}")
+            return np.zeros(len(target_datetimes))
+    
     # ============================================================================
     # TEIL 3: SPEICHER-SIMULATION (Battery Storage)
     # ============================================================================
@@ -541,12 +699,17 @@ class EnergySystemSimulator:
                                 start_date, start_time, end_date, end_time,
                                 system_efficiency,
                                 battery_capacity_kwh, battery_efficiency,
-                                annual_consumption_kwh):
+                                annual_consumption_kwh,
+                                ecar_km_per_year=0,
+                                heatpump_annual_kwh=0):
         """
         Run complete energy system simulation with multiple roof surfaces.
         
         Parameters:
         - roof_surfaces: List of dicts with {tilt, azimuth, kwp, name}
+        - annual_consumption_kwh: Household consumption
+        - ecar_km_per_year: E-Car driving distance (km/year)
+        - heatpump_annual_kwh: Heat pump consumption (kWh/year)
         
         Returns:
         - DataFrame with complete results
@@ -567,15 +730,45 @@ class EnergySystemSimulator:
             print("\n❌ Produktion konnte nicht berechnet werden")
             return None, None
         
-        # TEIL 2: Verbrauch
-        consumption_array = self.load_household_consumption(
+        # TEIL 2: Verbrauch (Kombiniert: Haushalt + E-Auto + Wärmepumpe)
+        
+        # 2a. Haushalt
+        household_array = self.load_household_consumption(
             annual_consumption_kwh,
             production_df.index
         )
         
-        if consumption_array is None:
-            print("\n❌ Verbrauch konnte nicht berechnet werden")
+        if household_array is None:
+            print("\n❌ Haushalts-Verbrauch konnte nicht berechnet werden")
             return None, None
+        
+        # 2b. E-Auto (optional)
+        ecar_array = self.load_ecar_consumption(
+            ecar_km_per_year,
+            production_df.index
+        ) if ecar_km_per_year > 0 else np.zeros(len(production_df))
+        
+        # 2c. Wärmepumpe (optional)
+        heatpump_array = self.load_heatpump_consumption(
+            heatpump_annual_kwh,
+            production_df.index
+        ) if heatpump_annual_kwh > 0 else np.zeros(len(production_df))
+        
+        # Kombiniere alle Verbrauchsquellen
+        consumption_array = household_array + ecar_array + heatpump_array
+        
+        total_household = household_array.sum()
+        total_ecar = ecar_array.sum()
+        total_heatpump = heatpump_array.sum()
+        total_consumption = consumption_array.sum()
+        
+        print(f"\n📊 GESAMT-VERBRAUCH:")
+        print(f"   Haushalt: {total_household:.2f} kWh ({total_household/total_consumption*100:.1f}%)")
+        if ecar_km_per_year > 0:
+            print(f"   E-Auto: {total_ecar:.2f} kWh ({total_ecar/total_consumption*100:.1f}%)")
+        if heatpump_annual_kwh > 0:
+            print(f"   Wärmepumpe: {total_heatpump:.2f} kWh ({total_heatpump/total_consumption*100:.1f}%)")
+        print(f"   GESAMT: {total_consumption:.2f} kWh")
         
         # TEIL 3: Speicher-Simulation
         storage_results = self.simulate_storage(
@@ -818,9 +1011,27 @@ def main():
             battery_capacity_kwh = float(input("   Speicherkapazität in kWh: "))
             battery_efficiency = float(input("   Wirkungsgrad (z.B. 0.95): ") or "0.95")
         
-        # 5. Verbrauch
+        # 5. Verbrauch (Haushalt + optional E-Auto + Wärmepumpe)
         print("\n🏠 VERBRAUCH:")
-        annual_consumption_kwh = float(input("   Jahresverbrauch in kWh (z.B. 5000): "))
+        
+        print("\n   HAUSHALT:")
+        annual_consumption_kwh = float(input("   Jahresverbrauch Haushalt in kWh (z.B. 5000): "))
+        
+        print("\n   E-AUTO:")
+        has_ecar = input("   E-Auto vorhanden? (j/n): ").strip().lower()
+        ecar_km_per_year = 0
+        
+        if has_ecar == 'j':
+            ecar_km_per_year = float(input("   Fahrleistung in km/Jahr (z.B. 15000): "))
+            estimated_kwh = (ecar_km_per_year / 100) * 18
+            print(f"   → Geschätzt: {estimated_kwh:.0f} kWh/Jahr (bei 18 kWh/100km)")
+        
+        print("\n   WÄRMEPUMPE:")
+        has_heatpump = input("   Wärmepumpe vorhanden? (j/n): ").strip().lower()
+        heatpump_annual_kwh = 0
+        
+        if has_heatpump == 'j':
+            heatpump_annual_kwh = float(input("   Jahresverbrauch Wärmepumpe in kWh (z.B. 4000): "))
         
         # SIMULATION AUSFÜHREN
         print("\n" + "="*70)
@@ -837,7 +1048,9 @@ def main():
             system_efficiency=system_efficiency,
             battery_capacity_kwh=battery_capacity_kwh,
             battery_efficiency=battery_efficiency,
-            annual_consumption_kwh=annual_consumption_kwh
+            annual_consumption_kwh=annual_consumption_kwh,
+            ecar_km_per_year=ecar_km_per_year,
+            heatpump_annual_kwh=heatpump_annual_kwh
         )
         
         if result_table is not None and summary is not None:
