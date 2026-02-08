@@ -17,11 +17,13 @@ Ausgabe:
 
 import pandas as pd
 import numpy as np
+import re
 from datetime import datetime
 from pvlib.iotools import get_pvgis_hourly
 import pytz
 import pickle
 import os
+import pgeocode
 
 
 class EnergySystemSimulator:
@@ -74,19 +76,9 @@ class EnergySystemSimulator:
         # Load battery systems with efficiency data
         self.battery_systems = self.load_battery_systems()
         
-        # German postal codes (sample)
-        self.plz_to_coords = {
-            '10115': (52.5200, 13.4050),  # Berlin
-            '80331': (48.1351, 11.5820),  # München
-            '20095': (53.5511, 9.9937),   # Hamburg
-            '50667': (50.9375, 6.9603),   # Köln
-            '60311': (50.1109, 8.6821),   # Frankfurt
-            '70173': (48.7758, 9.1829),   # Stuttgart
-            '01067': (51.0504, 13.7373),  # Dresden
-            '30159': (52.3759, 9.7320),   # Hannover
-            '28195': (53.0793, 8.8017),   # Bremen
-            '04109': (51.3397, 12.3731),  # Leipzig
-        }
+        # Initialize pgeocode for German postal codes
+        print("   Initialisiere PLZ-Datenbank...")
+        self.nomi = pgeocode.Nominatim('de')
         
         print("✅ Energy System Simulator initialisiert")
         print(f"   Cache: {cache_dir}")
@@ -130,11 +122,51 @@ class EnergySystemSimulator:
     # TEIL 1: PV-PRODUKTION (Solar Irradiation & Energy Calculation)
     # ============================================================================
     
-    def plz_to_coordinates(self, plz):
-        """Convert German postal code to coordinates."""
-        if plz in self.plz_to_coords:
-            return self.plz_to_coords[plz]
+    def extract_plz_from_address(self, address_string):
+        """
+        Extract German postal code (PLZ) from a full address string.
+        
+        Examples:
+        - "Dudenstraße 80, 10965 Berlin, Deutschland" → "10965"
+        - "72108 Rottenburg" → "72108"
+        - "10115" → "10115"
+        
+        Returns:
+        - PLZ string (5 digits) or None if not found
+        """
+        # German PLZ pattern: 5 digits
+        plz_pattern = r'\b(\d{5})\b'
+        match = re.search(plz_pattern, address_string)
+        
+        if match:
+            return match.group(1)
         return None
+    
+    def plz_to_coordinates(self, plz_or_address):
+        """
+        Convert German postal code or full address to coordinates.
+        
+        Parameters:
+        - plz_or_address: Either a 5-digit PLZ or full address string
+          (e.g., "10965" or "Dudenstraße 80, 10965 Berlin, Deutschland")
+        
+        Returns:
+        - Tuple (latitude, longitude) or None if PLZ not found
+        """
+        # Extract PLZ if full address is provided
+        plz = self.extract_plz_from_address(plz_or_address)
+        
+        if not plz:
+            return None
+        
+        # Query pgeocode database
+        result = self.nomi.query_postal_code(plz)
+        
+        # Check if valid result
+        if pd.isna(result.latitude) or pd.isna(result.longitude):
+            return None
+        
+        return (result.latitude, result.longitude)
     
     def get_cache_filename(self, lat, lon, tilt, azimuth, year):
         """Generate cache filename for PVGIS data."""
@@ -730,45 +762,45 @@ class EnergySystemSimulator:
             print("\n❌ Produktion konnte nicht berechnet werden")
             return None, None
         
-        # TEIL 2: Verbrauch (Kombiniert: Haushalt + E-Auto + Wärmepumpe)
+        # TEIL 2: Verbrauch (Haushalt + optional E-Auto + Wärmepumpe)
+        print("\n" + "="*60)
+        print("🏠 VERBRAUCH LADEN")
+        print("="*60)
         
-        # 2a. Haushalt
+        # Haushalt
         household_array = self.load_household_consumption(
             annual_consumption_kwh,
             production_df.index
         )
         
         if household_array is None:
-            print("\n❌ Haushalts-Verbrauch konnte nicht berechnet werden")
+            print("\n❌ Verbrauch konnte nicht berechnet werden")
             return None, None
         
-        # 2b. E-Auto (optional)
-        ecar_array = self.load_ecar_consumption(
-            ecar_km_per_year,
-            production_df.index
-        ) if ecar_km_per_year > 0 else np.zeros(len(production_df))
-        
-        # 2c. Wärmepumpe (optional)
-        heatpump_array = self.load_heatpump_consumption(
-            heatpump_annual_kwh,
-            production_df.index
-        ) if heatpump_annual_kwh > 0 else np.zeros(len(production_df))
-        
-        # Kombiniere alle Verbrauchsquellen
-        consumption_array = household_array + ecar_array + heatpump_array
-        
-        total_household = household_array.sum()
-        total_ecar = ecar_array.sum()
-        total_heatpump = heatpump_array.sum()
-        total_consumption = consumption_array.sum()
-        
-        print(f"\n📊 GESAMT-VERBRAUCH:")
-        print(f"   Haushalt: {total_household:.2f} kWh ({total_household/total_consumption*100:.1f}%)")
+        # E-Auto (optional)
+        ecar_array = np.zeros(len(production_df))
         if ecar_km_per_year > 0:
-            print(f"   E-Auto: {total_ecar:.2f} kWh ({total_ecar/total_consumption*100:.1f}%)")
+            print(f"\n📌 E-Auto: {ecar_km_per_year:.0f} km/Jahr")
+            ecar_array = self.load_ecar_consumption(ecar_km_per_year, production_df.index)
+            if ecar_array is None:
+                print("⚠️  E-Auto-Verbrauch konnte nicht geladen werden, wird ignoriert")
+                ecar_array = np.zeros(len(production_df))
+        
+        # Wärmepumpe (optional)
+        heatpump_array = np.zeros(len(production_df))
         if heatpump_annual_kwh > 0:
-            print(f"   Wärmepumpe: {total_heatpump:.2f} kWh ({total_heatpump/total_consumption*100:.1f}%)")
-        print(f"   GESAMT: {total_consumption:.2f} kWh")
+            print(f"\n📌 Wärmepumpe: {heatpump_annual_kwh:.0f} kWh/Jahr")
+            heatpump_array = self.load_heatpump_consumption(heatpump_annual_kwh, production_df.index)
+            if heatpump_array is None:
+                print("⚠️  Wärmepumpen-Verbrauch konnte nicht geladen werden, wird ignoriert")
+                heatpump_array = np.zeros(len(production_df))
+        
+        # Gesamt-Verbrauch
+        consumption_array = household_array + ecar_array + heatpump_array
+        print(f"\n✅ Gesamt-Verbrauch: {consumption_array.sum():.2f} kWh")
+        print(f"   Haushalt: {household_array.sum():.2f} kWh")
+        print(f"   E-Auto: {ecar_array.sum():.2f} kWh")
+        print(f"   Wärmepumpe: {heatpump_array.sum():.2f} kWh")
         
         # TEIL 3: Speicher-Simulation
         storage_results = self.simulate_storage(
@@ -805,10 +837,13 @@ class EnergySystemSimulator:
             if col.startswith('PV_Dach') and col.endswith('_kWh'):
                 result_dict[col] = production_df[col].round(4)
         
-        # Add total production and other columns
+        # Add total production and consumption breakdown
         result_dict.update({
             'PV_Gesamt_kWh': production_df['PV_Gesamt_kWh'].round(4),
-            'Verbrauch_kWh': consumption_array.round(4),
+            'Haushalt_Verbrauch_kWh': household_array.round(4),
+            'ECar_Verbrauch_kWh': ecar_array.round(4),
+            'Waermepumpe_Verbrauch_kWh': heatpump_array.round(4),
+            'Gesamt_Verbrauch_kWh': consumption_array.round(4),
             'Speicher_kWh': storage_results['battery_soc'].round(4),
             'Netz_kWh': storage_results['grid_balance'].round(4)
         })
@@ -819,7 +854,7 @@ class EnergySystemSimulator:
         total_pv = result_table['PV_Gesamt_kWh'].sum()
         total_feed_in = result_table[result_table['Netz_kWh'] > 0]['Netz_kWh'].sum()
         total_draw = abs(result_table[result_table['Netz_kWh'] < 0]['Netz_kWh'].sum())
-        total_consumption = result_table['Verbrauch_kWh'].sum()
+        total_consumption = result_table['Gesamt_Verbrauch_kWh'].sum()
         
         summary = {
             'total_pv_production': total_pv,
@@ -849,25 +884,32 @@ def main():
         
         # 1. Standort
         print("📍 STANDORT:")
-        location_input = input("   PLZ oder Breitengrad (z.B. '10115' oder '52.5'): ").strip()
+        print("   Optionen:")
+        print("   - Vollständige Adresse: 'Dudenstraße 80, 10965 Berlin, Deutschland'")
+        print("   - Nur PLZ: '10965'")
+        print("   - Koordinaten: Breitengrad '52.5' (dann wird Längengrad abgefragt)")
+        location_input = input("\n   Eingabe: ").strip()
         
-        plz = None
         latitude = None
         longitude = None
         
-        if location_input.isdigit() and len(location_input) == 5:
-            plz = location_input
-            coords = simulator.plz_to_coordinates(plz)
-            if coords:
-                latitude, longitude = coords
-                print(f"   → {latitude:.2f}°N, {longitude:.2f}°E")
-            else:
-                print(f"   PLZ nicht gefunden")
-                latitude = float(input("   Breitengrad: "))
-                longitude = float(input("   Längengrad: "))
+        # Try to extract PLZ from input (works for PLZ or full address)
+        coords = simulator.plz_to_coordinates(location_input)
+        
+        if coords:
+            # Successfully extracted PLZ and found coordinates
+            latitude, longitude = coords
+            extracted_plz = simulator.extract_plz_from_address(location_input)
+            print(f"   ✅ PLZ {extracted_plz} gefunden: {latitude:.4f}°N, {longitude:.4f}°E")
         else:
-            latitude = float(location_input)
-            longitude = float(input("   Längengrad: "))
+            # No PLZ found, try as direct coordinate input
+            try:
+                latitude = float(location_input)
+                longitude = float(input("   Längengrad: "))
+                print(f"   ✅ Koordinaten: {latitude:.4f}°N, {longitude:.4f}°E")
+            except ValueError:
+                print(f"   ❌ Ungültige Eingabe. Bitte PLZ, Adresse oder Koordinaten eingeben.")
+                return
         
         # 2. PV-Modultyp auswählen
         print("\n🔲 PV-MODULTYP:")
@@ -891,9 +933,8 @@ def main():
             selected_module_key = 'Winaico 450'
             selected_module = simulator.PV_MODULES[selected_module_key]
         
-        # 3. Systemwirkungsgrad
-        print("\n⚙️  SYSTEMWIRKUNGSGRAD:")
-        system_efficiency = float(input("   Wirkungsgrad (z.B. 0.8 für 80%): ") or "0.8")
+        # 3. Systemwirkungsgrad (fest auf 80%)
+        system_efficiency = 0.8
         
         # 4. Dachflächen konfigurieren
         print("\n☀️  DACHFLÄCHEN:")
