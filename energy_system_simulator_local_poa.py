@@ -257,10 +257,99 @@ class EnergySystemSimulator:
             f"pvgis_{lat:.2f}_{lon:.2f}_{tilt}_{azimuth}_{year}.pkl"
         )
     
+    def load_or_fetch_ghi_data(self, latitude, longitude, year=2023):
+        """
+        Load GHI (horizontal) data from grid cache.
+        Uses pre-downloaded GHI grid instead of API calls!
+        """
+        # Find nearest grid point
+        lat_grid = round(latitude / 0.25) * 0.25
+        lon_grid = round(longitude / 0.5) * 0.5
+        
+        # Clamp to Germany bounds
+        lat_grid = max(47.5, min(55.0, lat_grid))
+        lon_grid = max(6.0, min(15.0, lon_grid))
+        
+        cache_file = f"ghi_grid/ghi_{lat_grid:.2f}_{lon_grid:.2f}_{year}.pkl"
+        
+        if not os.path.exists(cache_file):
+            print(f"   ❌ GHI-Grid-Datei nicht gefunden: {cache_file}")
+            print(f"      Nächster Grid-Punkt: {lat_grid:.2f}°N, {lon_grid:.2f}°E")
+            return None, None
+        
+        print(f"   ✅ Lade GHI aus Grid...")
+        print(f"      Grid-Punkt: {lat_grid:.2f}°N, {lon_grid:.2f}°E")
+        
+        with open(cache_file, 'rb') as f:
+            cached = pickle.load(f)
+        
+        return cached['data'], cached.get('meta')
+    
+    def calculate_poa_locally(self, ghi_data, latitude, longitude, tilt, azimuth):
+        """
+        Calculate POA from GHI data locally using pvlib.
+        
+        Parameters:
+        - ghi_data: DataFrame with 'ghi' column
+        - tilt: Panel tilt (degrees)
+        - azimuth: Panel azimuth (PVGIS convention!)
+        
+        Returns:
+        - DataFrame with POA components
+        """
+        # Calculate solar position for all timestamps
+        solar_pos = pvlib.solarposition.get_solarposition(
+            time=ghi_data.index,
+            latitude=latitude,
+            longitude=longitude
+        )
+        
+        # Calculate POA components for each timestamp
+        poa_data = ghi_data.copy()
+        poa_direct = []
+        poa_diffuse = []
+        poa_ground = []
+        
+        for idx, (ghi_val, zenith, az_sun) in enumerate(zip(
+            ghi_data['ghi'],
+            solar_pos['zenith'],
+            solar_pos['azimuth']
+        )):
+            if zenith >= 90 or ghi_val <= 0:
+                poa_direct.append(0.0)
+                poa_diffuse.append(0.0)
+                poa_ground.append(0.0)
+                continue
+            
+            # Decompose GHI
+            dni, dhi = decompose_ghi_to_components(ghi_val, zenith)
+            
+            # Calculate POA
+            poa = pvlib.irradiance.get_total_irradiance(
+                surface_tilt=tilt,
+                surface_azimuth=azimuth,
+                solar_zenith=zenith,
+                solar_azimuth=az_sun,
+                dni=dni,
+                ghi=ghi_val,
+                dhi=dhi,
+                albedo=0.2
+            )
+            
+            poa_direct.append(poa['poa_direct'])
+            poa_diffuse.append(poa['poa_sky_diffuse'])
+            poa_ground.append(poa['poa_ground_diffuse'])
+        
+        poa_data['poa_direct'] = poa_direct
+        poa_data['poa_sky_diffuse'] = poa_diffuse
+        poa_data['poa_ground_diffuse'] = poa_ground
+        
+        return poa_data
+    
     def load_or_fetch_pvgis_data(self, latitude, longitude, tilt, azimuth, year=2023):
         """
-        Load PVGIS data from cache or fetch from API.
-        Only makes API call if data not cached.
+        DEPRECATED - Use load_or_fetch_ghi_data() + calculate_poa_locally() instead.
+        Kept for backwards compatibility.
         """
         cache_file = self.get_cache_filename(latitude, longitude, tilt, azimuth, year)
         
