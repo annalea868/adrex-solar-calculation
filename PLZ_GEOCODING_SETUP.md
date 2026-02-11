@@ -1,129 +1,77 @@
-# PLZ-Geocoding mit pgeocode - Setup & Verwendung
+# PLZ-Geocoding - Lokale Datenbank
 
-## ✅ Was wurde implementiert?
+## ✅ Unterstützte Eingabe-Formate
 
-Die beiden Simulatoren unterstützen jetzt:
+Die beiden Simulatoren akzeptieren:
 1. **Vollständige Adressen** (HubSpot-Format): `"Dudenstraße 80, 10965 Berlin, Deutschland"`
 2. **Nur PLZ**: `"10965"`
 3. **Koordinaten** (wie vorher): `"52.5"` + Längengrad-Eingabe
 
-## 🔧 Technische Details
+## 📦 PLZ-Datenbank
 
-### Neue Funktionen in beiden Simulatoren:
-
-#### 1. `extract_plz_from_address(address_string)`
-Extrahiert deutsche PLZ (5 Ziffern) aus beliebigem Text.
-
-**Beispiele:**
-- `"Dudenstraße 80, 10965 Berlin, Deutschland"` → `"10965"`
-- `"72108"` → `"72108"`
-- `"München 80331, Germany"` → `"80331"`
-
-#### 2. `plz_to_coordinates(plz_or_address)`
-Konvertiert PLZ oder Adresse zu Koordinaten mit **pgeocode**.
-
-**Vorteile:**
-- ✅ Offline (nach erstem Download)
-- ✅ Alle deutschen PLZ (~8000+)
-- ✅ Keine API-Keys nötig
-- ✅ Keine Rate-Limits
-- ✅ Sehr schnell
-
-## 📦 Installation
-
-```bash
-pip3 install -r requirements.txt
-```
-
-Das ist alles! Die PLZ-Datenbank ist bereits im Repository enthalten.
-
-## ✅ Lokale PLZ-Datenbank (NEU!)
-
-Die deutsche PLZ-Datenbank (~3.6 MB) ist jetzt **im Repository enthalten**:
+Die deutsche PLZ-Datenbank ist **im Repository enthalten** (`plz_data/`):
 ```
 plz_data/
-├── DE.txt         (2.3 MB)
-└── DE-index.txt   (1.3 MB)
+├── DE.txt         (2.3 MB) - Alle deutschen PLZ mit Koordinaten
+├── DE-index.txt   (1.3 MB) - Index für schnellen Zugriff
+└── README.md      - Dokumentation
 ```
 
-**Vorteile:**
-- ✅ **Kein Internet-Download** beim Setup
-- ✅ **Kein SSL-Problem** (keine Zertifikate nötig)
-- ✅ **Sofort einsatzbereit** nach Git Clone
-- ✅ **Funktioniert offline** von Anfang an
+**Größe:** 3.6 MB gesamt  
+**Quelle:** Erstellt mit [pgeocode](https://github.com/symerio/pgeocode) (Daten von GeoNames)  
+**Abdeckung:** ~8000 deutsche Postleitzahlen
+
+### Automatische Verwendung
 
 Die Simulatoren kopieren diese Dateien automatisch beim ersten Start 
-in den pgeocode Cache (`~/.cache/pgeocode/`).
+in den pgeocode Cache (`~/.cache/pgeocode/`). 
 
-## 🧪 Test
+**Kein Setup erforderlich** - funktioniert sofort nach `git clone`!
 
-Nach der Installation kannst du die Funktion testen:
+## 🎯 Verwendung im Simulator
 
-```python
-import pgeocode
+### Input-Beispiele beim Start:
 
-nomi = pgeocode.Nominatim('de')
-result = nomi.query_postal_code("10965")
-
-print(f"Breitengrad: {result.latitude}")   # 52.5003
-print(f"Längengrad: {result.longitude}")   # 13.3889
-print(f"Stadt: {result.place_name}")       # Berlin
+**1. HubSpot-Adresse** (aus Deal):
+```
+📍 STANDORT:
+   Eingabe: Dudenstraße 80, 10965 Berlin, Deutschland
+   ✅ PLZ 10965 gefunden: 52.4855°N, 13.3946°E
 ```
 
-## 📋 Verwendung im Simulator
-
-### Input-Beispiele:
-
-1. **HubSpot-Adresse** (aus Deal):
-   ```
-   Eingabe: Dudenstraße 80, 10965 Berlin, Deutschland
-   → PLZ 10965 gefunden: 52.5003°N, 13.3889°E
-   ```
-
-2. **Nur PLZ**:
-   ```
+**2. Nur PLZ**:
+```
+📍 STANDORT:
    Eingabe: 72108
-   → PLZ 72108 gefunden: 48.4800°N, 8.9300°E
-   ```
+   ✅ PLZ 72108 gefunden: 48.4796°N, 8.9500°E
+```
 
-3. **Koordinaten** (wie vorher):
-   ```
+**3. Koordinaten** (direkte Eingabe):
+```
+📍 STANDORT:
    Eingabe: 52.5
    Längengrad: 13.4
-   → Koordinaten: 52.5000°N, 13.4000°E
-   ```
+   ✅ Koordinaten: 52.5000°N, 13.4000°E
+```
 
-## 🗂️ Geänderte Dateien
+## 🔧 Technische Implementierung
 
-1. **requirements.txt** - `pgeocode>=0.4.0` hinzugefügt
-2. **energy_system_simulator.py** - PLZ-Extraktion implementiert
-3. **energy_system_simulator_local_poa.py** - PLZ-Extraktion implementiert
+### Funktionen in beiden Simulatoren:
 
-## 🎯 Workflow für Adrex-Mitarbeiter
+**`extract_plz_from_address(address_string)`**  
+Extrahiert deutsche PLZ (5 Ziffern) aus beliebigem Text mit Regex-Pattern `\b(\d{5})\b`.
 
-1. HubSpot Deal auswählen
-2. Adresse wird automatisch eingefügt (z.B. "Dudenstraße 80, 10965 Berlin, Deutschland")
-3. Python-Script extrahiert PLZ automatisch ("10965")
-4. pgeocode liefert Koordinaten (52.5003°N, 13.3889°E)
-5. GHI-Daten aus lokalem Grid werden verwendet
-6. Simulation läuft!
+**`plz_to_coordinates(plz_or_address)`**  
+Konvertiert PLZ oder Adresse zu Koordinaten. Verwendet die lokale pgeocode-Datenbank.
 
-## 📊 Performance
+**`_setup_pgeocode()`**  
+Kopiert automatisch die PLZ-Dateien aus `plz_data/` in den pgeocode Cache.
 
-- **Erste Verwendung:** ~2-5 Sekunden (Download der Datenbank)
-- **Danach:** < 0.1 Sekunden pro PLZ-Lookup (offline!)
-- **Datenbank-Größe:** ~2 MB (wird in `~/.cache/pgeocode/` gespeichert)
+## 📊 Vorteile
 
-## ✅ Vorteile gegenüber der alten Lösung
-
-**Alt (hardcodiertes Dictionary):**
-- ❌ Nur 10 Städte
-- ❌ Manuell gepflegt
-- ❌ Keine Adress-Unterstützung
-
-**Neu (pgeocode):**
-- ✅ 8000+ deutsche PLZ
-- ✅ Automatisch aktuell
-- ✅ Adress-Extraktion
-- ✅ Offline & schnell
-- ✅ Keine Wartung nötig
+**Gegenüber alter Lösung (hardcodiertes Dictionary):**
+- ✅ **8000+ PLZ** statt nur 10 Städte
+- ✅ **Adress-Extraktion** (HubSpot-Integration)
+- ✅ **Vollständig offline** - keine API-Calls
+- ✅ **Keine Wartung** nötig
+- ✅ **< 0.1 Sekunden** pro Lookup
