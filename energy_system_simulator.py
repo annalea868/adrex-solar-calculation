@@ -824,10 +824,16 @@ class EnergySystemSimulator:
         
         # Gesamt-Verbrauch
         consumption_array = household_array + ecar_array + heatpump_array
+        
+        # Speichere Jahressummen für Wirtschaftlichkeit
+        total_household = household_array.sum()
+        total_ecar = ecar_array.sum()
+        total_heatpump = heatpump_array.sum()
+        
         print(f"\n✅ Gesamt-Verbrauch: {consumption_array.sum():.2f} kWh")
-        print(f"   Haushalt: {household_array.sum():.2f} kWh")
-        print(f"   E-Auto: {ecar_array.sum():.2f} kWh")
-        print(f"   Wärmepumpe: {heatpump_array.sum():.2f} kWh")
+        print(f"   Haushalt: {total_household:.2f} kWh")
+        print(f"   E-Auto: {total_ecar:.2f} kWh")
+        print(f"   Wärmepumpe: {total_heatpump:.2f} kWh")
         
         # TEIL 3: Speicher-Simulation
         storage_results = self.simulate_storage(
@@ -882,12 +888,17 @@ class EnergySystemSimulator:
         total_feed_in = result_table[result_table['Netz_kWh'] > 0]['Netz_kWh'].sum()
         total_draw = abs(result_table[result_table['Netz_kWh'] < 0]['Netz_kWh'].sum())
         total_consumption = result_table['Gesamt_Verbrauch_kWh'].sum()
+        total_kwp = sum(roof['kwp'] for roof in roof_surfaces)
         
         summary = {
             'total_pv_production': total_pv,
+            'total_kwp': total_kwp,
             'total_grid_feed_in': total_feed_in,
             'total_grid_draw': total_draw,
             'total_consumption': total_consumption,
+            'total_household': total_household,
+            'total_ecar': total_ecar,
+            'total_heatpump': total_heatpump,
             'num_intervals': len(result_table)
         }
         
