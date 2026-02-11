@@ -37,11 +37,12 @@ TESTING_DOCUMENTATION.md            ← Test-Dokumentation
 
 📁 pvgis_cache/                     ← PVGIS-Daten-Cache (ignored)
 
+📁 plz_data/                        ← PLZ-Datenbank (lokal, 3.6 MB)
+   ├── DE.txt                       ← Alle deutschen PLZ
+   └── DE-index.txt                 ← Index
+
 📁 archiv_alt/                      ← Alte/nicht mehr benötigte Dateien
-
-📁 old_versions/                    ← Sehr alte Versionen
-
-📁 Demo Adrex Calculation 9.9.25/   ← Demo-Calculator (separate)
+   └── old_versions/                ← Sehr alte Versionen
 ```
 
 ---
