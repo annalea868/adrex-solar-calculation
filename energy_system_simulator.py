@@ -76,9 +76,9 @@ class EnergySystemSimulator:
         # Load battery systems with efficiency data
         self.battery_systems = self.load_battery_systems()
         
-        # Initialize pgeocode for German postal codes
-        print("   Initialisiere PLZ-Datenbank...")
-        self.nomi = pgeocode.Nominatim('de')
+        # Initialize pgeocode for German postal codes (from local file)
+        print("   Lade PLZ-Datenbank...")
+        self._setup_pgeocode()
         
         print("✅ Energy System Simulator initialisiert")
         print(f"   Cache: {cache_dir}")
@@ -119,8 +119,35 @@ class EnergySystemSimulator:
             return {}
     
     # ============================================================================
-    # TEIL 1: PV-PRODUKTION (Solar Irradiation & Energy Calculation)
+    # STANDORT & PLZ-VERARBEITUNG
     # ============================================================================
+    
+    def _setup_pgeocode(self):
+        """
+        Setup pgeocode to use local PLZ database.
+        Copies local files to pgeocode cache if needed.
+        """
+        import shutil
+        
+        # Define paths
+        local_plz_dir = os.path.join(os.path.dirname(__file__), "plz_data")
+        pgeocode_cache = os.path.expanduser("~/.cache/pgeocode")
+        
+        # Ensure cache directory exists
+        os.makedirs(pgeocode_cache, exist_ok=True)
+        
+        # Copy local files to pgeocode cache if they don't exist
+        for filename in ["DE.txt", "DE-index.txt"]:
+            local_file = os.path.join(local_plz_dir, filename)
+            cache_file = os.path.join(pgeocode_cache, filename)
+            
+            if os.path.exists(local_file) and not os.path.exists(cache_file):
+                print(f"   Kopiere {filename} in pgeocode Cache...")
+                shutil.copy2(local_file, cache_file)
+        
+        # Initialize pgeocode (will use cached files)
+        self.nomi = pgeocode.Nominatim('de')
+        print("   ✅ PLZ-Datenbank geladen (lokal)")
     
     def extract_plz_from_address(self, address_string):
         """

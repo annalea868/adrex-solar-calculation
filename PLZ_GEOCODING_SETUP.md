@@ -32,37 +32,28 @@ Konvertiert PLZ oder Adresse zu Koordinaten mit **pgeocode**.
 ## 📦 Installation
 
 ```bash
-pip3 install pgeocode
+pip3 install -r requirements.txt
 ```
 
-## ⚠️ SSL-Zertifikat-Problem (macOS)
+Das ist alles! Die PLZ-Datenbank ist bereits im Repository enthalten.
 
-Beim **ersten Start** lädt pgeocode die deutsche PLZ-Datenbank (~2MB) herunter. 
-Auf macOS kann es zu einem SSL-Zertifikat-Fehler kommen.
+## ✅ Lokale PLZ-Datenbank (NEU!)
 
-### Lösung:
-
-**Option 1: Python-Zertifikate installieren (empfohlen)**
-```bash
-# Öffne diesen Ordner im Finder:
-open /Applications/Python\ 3.10/
-
-# Doppelklick auf "Install Certificates.command"
+Die deutsche PLZ-Datenbank (~3.6 MB) ist jetzt **im Repository enthalten**:
+```
+plz_data/
+├── DE.txt         (2.3 MB)
+└── DE-index.txt   (1.3 MB)
 ```
 
-**Option 2: Manuell mit sudo**
-```bash
-sudo pip3 install --upgrade certifi
-```
+**Vorteile:**
+- ✅ **Kein Internet-Download** beim Setup
+- ✅ **Kein SSL-Problem** (keine Zertifikate nötig)
+- ✅ **Sofort einsatzbereit** nach Git Clone
+- ✅ **Funktioniert offline** von Anfang an
 
-**Option 3: Einmalig SSL-Verifikation deaktivieren**
-```python
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context
-import pgeocode
-```
-
-Nach dem ersten erfolgreichen Download funktioniert alles offline!
+Die Simulatoren kopieren diese Dateien automatisch beim ersten Start 
+in den pgeocode Cache (`~/.cache/pgeocode/`).
 
 ## 🧪 Test
 
