@@ -58,12 +58,13 @@ class WirtschaftlichkeitsRechner:
         eigenstrom_ecar = np.zeros(num_intervals)
         eigenstrom_waermepumpe = np.zeros(num_intervals)
         
+        # Use iloc for positional indexing (works with any index type)
         for i in range(num_intervals):
-            haushalt = df.loc[i, 'Haushalt_Verbrauch_kWh']
-            ecar = df.loc[i, 'ECar_Verbrauch_kWh']
-            waermepumpe = df.loc[i, 'Waermepumpe_Verbrauch_kWh']
-            gesamt = df.loc[i, 'Gesamt_Verbrauch_kWh']
-            netz = df.loc[i, 'Netz_kWh']
+            haushalt = df.iloc[i]['Haushalt_Verbrauch_kWh']
+            ecar = df.iloc[i]['ECar_Verbrauch_kWh']
+            waermepumpe = df.iloc[i]['Waermepumpe_Verbrauch_kWh']
+            gesamt = df.iloc[i]['Gesamt_Verbrauch_kWh']
+            netz = df.iloc[i]['Netz_kWh']
             
             if netz < 0:
                 # Netzbezug vorhanden → Verbrauch wird teilweise aus Netz gedeckt
