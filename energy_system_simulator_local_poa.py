@@ -1322,6 +1322,7 @@ def main():
             print("   Manuelle Eingabe:")
             battery_capacity_kwh = float(input("   Speicherkapazität in kWh: "))
             battery_efficiency = float(input("   Wirkungsgrad (z.B. 0.95): ") or "0.95")
+            selected_battery_name = f"Manuell konfiguriert ({battery_capacity_kwh} kWh)"
         
         # 5. Verbrauch (Haushalt + optional E-Auto + Wärmepumpe)
         print("\n🏠 VERBRAUCH:")
@@ -1393,6 +1394,7 @@ def main():
             print("\n" + "="*70)
             save = input("\nErgebnisse als CSV speichern? (j/n): ").strip().lower()
             
+            csv_filepath = None
             if save == 'j':
                 default_name = f"simulation_{start_date.replace('/','')[:8]}_{end_date.replace('/','')[:8]}.csv"
                 print(f"\n💾 CSV-EXPORT:")
@@ -1404,9 +1406,69 @@ def main():
                 elif not filename.endswith('.csv'):
                     filename += '.csv'
                 
-                result_table.to_csv(filename, index=False, encoding='utf-8-sig')
+                # Ensure test_results directory
+                if '/' not in filename:
+                    os.makedirs('test_results', exist_ok=True)
+                    csv_filepath = os.path.join('test_results', filename)
+                else:
+                    csv_filepath = filename
+                
+                result_table.to_csv(csv_filepath, index=False, encoding='utf-8-sig')
                 print(f"\n   ✅ Erfolgreich gespeichert!")
-                print(f"   📁 Pfad: {os.path.abspath(filename)}")
+                print(f"   📁 Pfad: {os.path.abspath(csv_filepath)}")
+            
+            # OPTIONAL: Wirtschaftlichkeitsberechnung
+            print("\n" + "="*70)
+            print("💰 WIRTSCHAFTLICHKEITSBERECHNUNG")
+            print("="*70)
+            
+            berechne_wirtschaftlichkeit = input("\n   Wirtschaftlichkeit berechnen? (j/n): ").strip().lower()
+            
+            if berechne_wirtschaftlichkeit == 'j':
+                try:
+                    from wirtschaftlichkeit import WirtschaftlichkeitsRechner
+                    
+                    print("\n📝 ZUSÄTZLICHE PARAMETER:")
+                    
+                    # User-Inputs für Wirtschaftlichkeit
+                    invest_netto = float(input("\n   Investition netto [€] (z.B. 37700): "))
+                    aktueller_strompreis = float(input("   Aktueller Strompreis [€/kWh] (z.B. 0.35): "))
+                    preissteigerung = float(input("   Preissteigerungsrate [%/a] (z.B. 4.0): "))
+                    inflation = float(input("   Inflation [%/a] (z.B. 3.0): "))
+                    laufzeit = int(input("   Laufzeit [Jahre] (z.B. 20): "))
+                    
+                    einspeiseverguetung_input = input(f"   Einspeisevergütung [€/kWh] (Enter für 0.08): ").strip()
+                    einspeiseverguetung = float(einspeiseverguetung_input) if einspeiseverguetung_input else 0.08
+                    
+                    # Wirtschaftlichkeitsberechnung mit DataFrame (nicht CSV!)
+                    rechner = WirtschaftlichkeitsRechner()
+                    
+                    ergebnis = rechner.berechne_wirtschaftlichkeit(
+                        dataframe=result_table,
+                        pv_groesse_kwp=summary['total_kwp'],
+                        invest_netto=invest_netto,
+                        aktueller_strompreis=aktueller_strompreis,
+                        preissteigerung=preissteigerung,
+                        inflation=inflation,
+                        laufzeit=laufzeit,
+                        einspeiseverguetung=einspeiseverguetung
+                    )
+                    
+                    # Übersichtsblatt ausgeben
+                    rechner.print_uebersichtsblatt(
+                        ergebnis, 
+                        pv_groesse_kwp=summary['total_kwp'],
+                        speicher_kwh=battery_capacity_kwh,
+                        modultyp=selected_module['name'],
+                        speichertyp=selected_battery_name if battery_capacity_kwh > 0 else "Kein Speicher"
+                    )
+                    
+                except ImportError:
+                    print("\n   ❌ wirtschaftlichkeit.py nicht gefunden")
+                except Exception as e:
+                    print(f"\n   ❌ Fehler bei Wirtschaftlichkeitsberechnung: {e}")
+                    import traceback
+                    traceback.print_exc()
             
             print("\n" + "="*70)
             print("✅ FERTIG!")

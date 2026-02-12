@@ -117,7 +117,10 @@ class WirtschaftlichkeitsRechner:
         Spezifischer Ertrag [kWh/kWp/a]
         Begrenzt auf max. 940 kWh/kWp/a
         """
-        spez_ertrag = jahresertrag / pv_groesse_kwp if pv_groesse_kwp > 0 else 0
+        if pv_groesse_kwp is None or pv_groesse_kwp == 0:
+            return 0
+        
+        spez_ertrag = jahresertrag / pv_groesse_kwp
         spez_ertrag = min(spez_ertrag, self.MAX_SPEZ_ERTRAG)
         return spez_ertrag
     
@@ -266,18 +269,23 @@ class WirtschaftlichkeitsRechner:
     # HAUPTFUNKTION: Vollständige Wirtschaftlichkeitsberechnung
     # ============================================================================
     
-    def berechne_wirtschaftlichkeit(self, csv_filepath, 
-                                   invest_netto,
-                                   aktueller_strompreis,
-                                   preissteigerung,
-                                   inflation,
-                                   laufzeit,
+    def berechne_wirtschaftlichkeit(self, 
+                                   csv_filepath=None,
+                                   dataframe=None,
+                                   pv_groesse_kwp=None,
+                                   invest_netto=None,
+                                   aktueller_strompreis=None,
+                                   preissteigerung=None,
+                                   inflation=None,
+                                   laufzeit=None,
                                    einspeiseverguetung=None):
         """
         Berechne alle Wirtschaftlichkeits-Kennzahlen.
         
         Parameters:
-        - csv_filepath: Pfad zur CSV vom Simulator
+        - csv_filepath: Pfad zur CSV vom Simulator (ODER dataframe)
+        - dataframe: DataFrame direkt vom Simulator (alternativ zu csv_filepath)
+        - pv_groesse_kwp: PV-Größe [kWp] (optional, wenn im Summary)
         - invest_netto: Investitionskosten [€]
         - aktueller_strompreis: Aktueller Strompreis [€/kWh]
         - preissteigerung: Preissteigerungsrate [%/a]
@@ -295,10 +303,17 @@ class WirtschaftlichkeitsRechner:
         print("💰 WIRTSCHAFTLICHKEITS-BERECHNUNG")
         print("="*70)
         
-        # 1. CSV laden
-        print(f"\n📂 Lade Simulationsdaten: {csv_filepath}")
-        df = pd.read_csv(csv_filepath)
-        print(f"   ✅ {len(df)} Intervalle geladen")
+        # 1. Daten laden (CSV oder DataFrame)
+        if dataframe is not None:
+            df = dataframe
+            print(f"\n📊 Verwende Simulationsdaten aus DataFrame")
+            print(f"   ✅ {len(df)} Intervalle")
+        elif csv_filepath:
+            print(f"\n📂 Lade Simulationsdaten: {csv_filepath}")
+            df = pd.read_csv(csv_filepath)
+            print(f"   ✅ {len(df)} Intervalle geladen")
+        else:
+            raise ValueError("Entweder csv_filepath oder dataframe muss angegeben werden")
         
         # 2. Jahressummen aus CSV
         jahresertrag = df['PV_Gesamt_kWh'].sum()
