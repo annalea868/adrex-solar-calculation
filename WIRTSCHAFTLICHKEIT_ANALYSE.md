@@ -147,47 +147,87 @@ Autarkie = (Eigenstrom / Verbrauch) × 100
 - Wärmepumpe: max. 55%
 - Gesamt: max. 80%
 
-### 4. Durchschnittlicher Strompreis (Seite 5)
+### 4. Durchschnittlicher Strompreis (aus CALCULATION.pdf Seite 6)
 ```
-ø_Strompreis = aktueller_Preis × ((1 + Preissteigerung)^Laufzeit - 1) / (Preissteigerung × Laufzeit)
+ORIGINAL-FORMEL:
+Preis_1 = aktueller Strompreis
+Preis_i+1 = Preis_i × (1 + (Preissteigerung + Inflation)/100)
+Summe_Kosten = Σ(Verbrauch_Jahr × Preis_i) für i=1..Laufzeit
+durchschn. Strompreis = Summe_Kosten / (Verbrauch_Jahr × Laufzeit)
+
+IMPLEMENTIERT (genau):
+Jahr für Jahr berechnen mit Preissteigerung + Inflation
 ```
 
-### 5. Jährliche Ersparnis (Seite 5)
+### 5. Einspeisevergütung (aus CALCULATION.pdf Seite 5)
 ```
-Jährl_Ersparnis = Eigenstrom_Gesamt × ø_Strompreis
+ORIGINAL-FORMEL (stufenweise):
+- Bis 10 kWp: 0,0803 €/kWh
+- 10-40 kWp: 0,0695 €/kWh  
+- 40-100 kWp: 0,0568 €/kWh
+
+Gewichtete Berechnung:
+Vergütungssatz = (P/10 × 0,0803) + ((P-10)/P × 0,0695)  [für P < 40 kWp]
+
+IMPLEMENTIERT:
+Stufenweise Berechnung je nach PV-Größe
 ```
 
-### 6. Jährliche Vergütung (Seite 5)
+### 6. Jährliche Ersparnis (aus CALCULATION.pdf Seite 6)
 ```
-Jährl_Vergütung = Netzeinspeisung × ø_Einspeisevergütung
+ORIGINAL-FORMEL:
+Ersparnis/Jahr = Eigenverbrauch_gesamt × durchschnittlicher Strompreis
+
+IMPLEMENTIERT (genau wie Original):
+Mit dynamischem Durchschnittspreis über Laufzeit
 ```
 
-### 7. Gesamtvorteil (Seite 6)
+### 7. Jährliche Vergütung (aus CALCULATION.pdf Seite 5)
 ```
-Gesamtvorteil = (Jährl_Ersparnis + Jährl_Vergütung) × Laufzeit - Invest_netto
-```
-**Besser:** NPV-Berechnung mit Barwertfaktor
+ORIGINAL-FORMEL:
+Vergütung/Jahr = (PV-Ertrag - Eigenverbrauch_gesamt) × Vergütungssatz
+               = Netzeinspeisung × Vergütungssatz
 
-### 8. Stromentstehungskosten (Seite 6)
-```
-LCOE = Invest_netto / (Jahresertrag × Laufzeit × (1 - Degradation))
-```
-**Vereinfacht:** 
-```
-LCOE = Invest_netto / (Jahresertrag × Laufzeit)
+IMPLEMENTIERT (genau wie Original):
+Mit gestuftem Vergütungssatz
 ```
 
-### 9. Amortisationszeit (Seite 6)
+### 8. Gesamtvorteil (aus CALCULATION.pdf Seite 6)
 ```
-Amortisationszeit = Invest_netto / (Jährl_Ersparnis + Jährl_Vergütung)
-```
-**Besser:** Dynamisch mit Preissteigerung
+ORIGINAL-FORMEL:
+Gesamtvorteil = (Ersparnis/Jahr + Vergütung/Jahr) × Laufzeit
 
-### 10. Rendite (Seite 6)
+IMPLEMENTIERT (genau wie Original):
+Einfache Summe ohne Barwertberechnung
 ```
-Rendite = ((Gesamtvorteil / Invest_netto) / Laufzeit) × 100
+
+### 9. Rendite (aus CALCULATION.pdf Seite 6)
 ```
-**Besser:** IRR (Internal Rate of Return)
+ORIGINAL-FORMEL:
+ROI = ((Gesamtvorteil - Investition × (1 - Restwertfaktor)) / Investition) / Laufzeit × 100
+Restwertfaktor = 0,8 (20% Restwert nach Laufzeit)
+
+IMPLEMENTIERT (genau wie Original):
+Mit Restwertfaktor 0,8
+```
+
+### 10. Stromentstehungskosten (aus CALCULATION.pdf Seite 6)
+```
+ORIGINAL-FORMEL:
+LCOE = Investition / (Jahresertrag × Laufzeit)
+
+IMPLEMENTIERT (genau wie Original):
+Ohne Degradation (wie im PDF)
+```
+
+### 11. Amortisationszeit (aus CALCULATION.pdf Seite 6)
+```
+ORIGINAL-FORMEL:
+Amortisation = Investition / (Ersparnis/Jahr + Vergütung/Jahr)
+
+IMPLEMENTIERT (genau wie Original):
+Einfache statische Berechnung
+```
 
 ---
 

@@ -22,8 +22,11 @@ class WirtschaftlichkeitsRechner:
     
     def __init__(self):
         """Initialisiere Rechner."""
-        # Konstanten
-        self.EINSPEISEVERGUETUNG = 0.08  # €/kWh (Standard 2023)
+        # Konstanten aus CALCULATION.pdf
+        self.EINSPEISEVERGUETUNG_BIS_10 = 0.0803  # €/kWh (bis 10 kWp)
+        self.EINSPEISEVERGUETUNG_10_40 = 0.0695   # €/kWh (10-40 kWp)
+        self.EINSPEISEVERGUETUNG_40_100 = 0.0568  # €/kWh (40-100 kWp)
+        self.RESTWERTFAKTOR = 0.8  # 20% Restwert nach Laufzeit
         self.MAX_AUTARKIE_HAUSHALT = 80.0  # %
         self.MAX_AUTARKIE_WAERMEPUMPE = 55.0  # %
         self.MAX_AUTARKIE_GESAMT = 80.0  # %
@@ -186,22 +189,63 @@ class WirtschaftlichkeitsRechner:
     # TEIL 3: WIRTSCHAFTLICHKEITS-BERECHNUNGEN
     # ============================================================================
     
-    def calculate_durchschnittlicher_strompreis(self, aktueller_preis, preissteigerung, laufzeit):
+    def calculate_einspeiseverguetung(self, pv_groesse_kwp):
+        """
+        Berechne stufenweise Einspeisevergütung nach PV-Größe.
+        
+        Aus CALCULATION.pdf Seite 5:
+        - Bis 10 kWp: 0,0803 €/kWh
+        - 10-40 kWp: 0,0695 €/kWh
+        - 40-100 kWp: 0,0568 €/kWh
+        
+        Gewichtet nach Anteilen.
+        """
+        if pv_groesse_kwp <= 10:
+            return self.EINSPEISEVERGUETUNG_BIS_10
+        elif pv_groesse_kwp <= 40:
+            # Gewichteter Durchschnitt
+            anteil_10 = 10 / pv_groesse_kwp
+            anteil_rest = (pv_groesse_kwp - 10) / pv_groesse_kwp
+            return (anteil_10 * self.EINSPEISEVERGUETUNG_BIS_10 + 
+                    anteil_rest * self.EINSPEISEVERGUETUNG_10_40)
+        elif pv_groesse_kwp <= 100:
+            # Gewichteter Durchschnitt über 3 Stufen
+            anteil_10 = 10 / pv_groesse_kwp
+            anteil_30 = 30 / pv_groesse_kwp
+            anteil_rest = (pv_groesse_kwp - 40) / pv_groesse_kwp
+            return (anteil_10 * self.EINSPEISEVERGUETUNG_BIS_10 + 
+                    anteil_30 * self.EINSPEISEVERGUETUNG_10_40 +
+                    anteil_rest * self.EINSPEISEVERGUETUNG_40_100)
+        else:
+            # Über 100 kWp (vereinfacht mit 40-100 Rate)
+            return self.EINSPEISEVERGUETUNG_40_100
+    
+    def calculate_durchschnittlicher_strompreis(self, aktueller_preis, preissteigerung, 
+                                               inflation, laufzeit, jahresverbrauch):
         """
         Durchschnittlicher Strompreis über Laufzeit [€/kWh]
-        Berücksichtigt Preissteigerung über die Jahre.
         
-        Formel aus CALCULATION.pdf:
-        ø_Strompreis = aktueller_Preis × ((1 + Preissteigerung)^Laufzeit - 1) / (Preissteigerung × Laufzeit)
+        GENAUE FORMEL aus CALCULATION.pdf Seite 6:
+        - Preis steigt jedes Jahr um (Preissteigerung + Inflation)
+        - Berechne Kosten für jedes Jahr
+        - Durchschnitt = Gesamtkosten / (Verbrauch × Laufzeit)
         """
-        if preissteigerung == 0:
-            return aktueller_preis
+        # Rate pro Jahr (kombiniert Preissteigerung + Inflation)
+        jahres_rate = (preissteigerung + inflation) / 100
         
-        preis_rate = preissteigerung / 100  # % zu Dezimal
+        summe_kosten = 0
+        preis_aktuell = aktueller_preis
         
-        avg_preis = aktueller_preis * (
-            ((1 + preis_rate) ** laufzeit - 1) / (preis_rate * laufzeit)
-        )
+        for jahr in range(1, laufzeit + 1):
+            # Kosten in diesem Jahr
+            kosten_jahr = jahresverbrauch * preis_aktuell
+            summe_kosten += kosten_jahr
+            
+            # Preis für nächstes Jahr
+            preis_aktuell = preis_aktuell * (1 + jahres_rate)
+        
+        # Durchschnittlicher Preis
+        avg_preis = summe_kosten / (jahresverbrauch * laufzeit)
         
         return avg_preis
     
@@ -256,15 +300,23 @@ class WirtschaftlichkeitsRechner:
     
     def calculate_rendite(self, gesamtvorteil, invest_netto, laufzeit):
         """
-        Eigenkapitalrendite [%/a]
-        = ((Gesamtvorteil / Investition) / Laufzeit) × 100
+        Eigenkapitalrendite (ROI) [%/a]
         
-        Vereinfachte Formel.
+        GENAUE FORMEL aus CALCULATION.pdf Seite 6:
+        ROI = ((Gesamtvorteil - Investition × (1 - Restwertfaktor)) / Investition) / Laufzeit × 100
+        
+        Restwertfaktor = 0,8 (20% Restwert der Anlage nach Laufzeit)
         """
         if invest_netto == 0 or laufzeit == 0:
             return 0
         
-        return ((gesamtvorteil / invest_netto) / laufzeit) * 100
+        # Berücksichtige Restwert der Anlage
+        restwert = invest_netto * self.RESTWERTFAKTOR
+        nettogewinn = gesamtvorteil - invest_netto + restwert
+        
+        roi = (nettogewinn / invest_netto) / laufzeit * 100
+        
+        return roi
     
     # ============================================================================
     # HAUPTFUNKTION: Vollständige Wirtschaftlichkeitsberechnung
@@ -368,11 +420,22 @@ class WirtschaftlichkeitsRechner:
         print("💶 WIRTSCHAFTLICHKEIT")
         print("="*70)
         
-        # Durchschnittlicher Strompreis
+        # Einspeisevergütung berechnen (stufenweise nach PV-Größe)
+        if einspeiseverguetung is None:
+            if pv_groesse_kwp is not None:
+                einspeiseverguetung = self.calculate_einspeiseverguetung(pv_groesse_kwp)
+                print(f"\n   📊 Einspeisevergütung (stufenweise): {einspeiseverguetung:.4f} €/kWh")
+                print(f"      (berechnet für {pv_groesse_kwp:.2f} kWp)")
+            else:
+                einspeiseverguetung = self.EINSPEISEVERGUETUNG_BIS_10
+                print(f"\n   📊 Einspeisevergütung: {einspeiseverguetung:.4f} €/kWh (Standard)")
+        
+        # Durchschnittlicher Strompreis (GENAU: Jahr für Jahr)
         avg_strompreis = self.calculate_durchschnittlicher_strompreis(
-            aktueller_strompreis, preissteigerung, laufzeit
+            aktueller_strompreis, preissteigerung, inflation, laufzeit, verbrauch_gesamt
         )
         print(f"\n   Aktueller Strompreis:         {aktueller_strompreis:.4f} €/kWh")
+        print(f"   Preissteigerung + Inflation:  {preissteigerung + inflation:.2f} %/a")
         print(f"   ø Strompreis ({laufzeit} Jahre): {avg_strompreis:.4f} €/kWh")
         
         # Jährliche Ersparnis
@@ -380,6 +443,7 @@ class WirtschaftlichkeitsRechner:
             eigenstrom_dict['eigenstrom_gesamt'], avg_strompreis
         )
         print(f"   Jährliche Ersparnis:          {jaehrl_ersparnis:>10.2f} €/a")
+        print(f"   (Eigenstrom {eigenstrom_dict['eigenstrom_gesamt']:.0f} kWh × {avg_strompreis:.4f} €/kWh)")
         
         # Jährliche Vergütung
         jaehrl_verguetung = self.calculate_jaehrliche_verguetung(
